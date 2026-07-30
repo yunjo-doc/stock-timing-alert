@@ -36,7 +36,7 @@ def run_analysis_cycle(cfg: dict):
 
         if curr_signal in ("BUY", "SELL") and curr_signal != prev_signal:
             message = _build_message(result)
-            kakao.notify(code, message, cfg)
+            kakao.notify_all_connected_users(code, message, cfg)
 
         db.upsert_last_signal(code, curr_signal, result.get("final_score", 0))
         results.append(result)

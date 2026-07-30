@@ -25,12 +25,10 @@ def load_config() -> dict:
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         cfg = json.load(f)
 
-    # 민감정보는 환경변수에서 덮어씀 (config.json에는 절대 실제 키를 넣지 마세요)
+    # 카카오 REST API 키는 앱 전체가 공유하는 자격증명이라 환경변수로 관리합니다.
+    # 사용자별 access_token/refresh_token은 이제 DB(users 테이블)에 저장됩니다 (app/auth.py, /account 참고).
     cfg.setdefault("kakao", {})
     cfg["kakao"]["rest_api_key"] = os.getenv("KAKAO_REST_API_KEY", cfg["kakao"].get("rest_api_key", ""))
-    cfg["kakao"]["access_token"] = os.getenv("KAKAO_ACCESS_TOKEN", cfg["kakao"].get("access_token", ""))
-    cfg["kakao"]["refresh_token"] = os.getenv("KAKAO_REFRESH_TOKEN", cfg["kakao"].get("refresh_token", ""))
-    cfg["kakao"]["enabled"] = os.getenv("KAKAO_ENABLED", str(cfg["kakao"].get("enabled", False))).lower() == "true"
 
     cfg["admin_token"] = os.getenv("ADMIN_TOKEN", "change-me")
 
@@ -40,9 +38,6 @@ def load_config() -> dict:
 def save_config(cfg: dict):
     """watch_list 등 일반 설정 변경사항을 config.json에 반영 (민감정보 제외하고 저장)"""
     safe_cfg = json.loads(json.dumps(cfg))  # deep copy
-    if "kakao" in safe_cfg:
-        safe_cfg["kakao"]["access_token"] = ""
-        safe_cfg["kakao"]["refresh_token"] = ""
     safe_cfg.pop("admin_token", None)
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(safe_cfg, f, ensure_ascii=False, indent=2)

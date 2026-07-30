@@ -58,19 +58,37 @@ def _send_kakao_memo(access_token: str, text: str) -> bool:
     return resp.status_code == 200
 
 
-def notify(code: str, message: str, cfg: dict):
-    kakao_cfg = cfg.get("kakao", {})
-    sent = False
+def notify_all_connected_users(code: str, message: str, cfg: dict):
+    """
+    카카오 '나에게 보내기'를 연동한 모든 사용자에게 알림을 보낸다.
+    access_token이 만료된 경우(401) refresh_token으로 한 번 자동 갱신 후 재시도한다.
+    연동한 사용자가 한 명도 없으면 콘솔 로그로 대체한다.
+    """
+    rest_api_key = cfg.get("kakao", {}).get("rest_api_key")
+    users = db.get_all_kakao_connected_users()
 
-    if kakao_cfg.get("enabled") and kakao_cfg.get("access_token"):
+    if not users:
+        print(f"[알림 - 카카오 연동 사용자 없음, 로그 대체]\n{message}\n")
+        db.log_notification(code, message, False)
+        return False
+
+    any_sent = False
+    for user in users:
+        sent = False
         try:
-            sent = _send_kakao_memo(kakao_cfg["access_token"], message)
-            if not sent:
-                print("[카카오톡 전송 실패 - 토큰 만료 가능성, /kakao/refresh 확인]")
+            sent = _send_kakao_memo(user["kakao_access_token"], message)
+            if not sent and rest_api_key and user.get("kakao_refresh_token"):
+                # 토큰 만료 가능성 -> 갱신 후 1회 재시도
+                refreshed = refresh_kakao_token(rest_api_key, user["kakao_refresh_token"])
+                new_access = refreshed.get("access_token")
+                new_refresh = refreshed.get("refresh_token", user["kakao_refresh_token"])
+                if new_access:
+                    db.save_user_kakao_tokens(user["id"], new_access, new_refresh)
+                    sent = _send_kakao_memo(new_access, message)
         except Exception as e:
-            print(f"[카카오톡 전송 오류] {e}")
-    else:
-        print(f"[알림 - 카카오 미연동, 로그 대체]\n{message}\n")
+            print(f"[카카오톡 전송 오류] user_id={user['id']}: {e}")
 
-    db.log_notification(code, message, sent)
-    return sent
+        db.log_notification(code, message, sent, user_id=user["id"])
+        any_sent = any_sent or sent
+
+    return any_sent

@@ -13,6 +13,8 @@ Supabase/PlanetScale 같은 외부 DB 서비스 연동을 고려하세요.
 
 import sqlite3
 import os
+import hashlib
+import secrets
 from datetime import datetime
 from contextlib import contextmanager
 
@@ -61,12 +63,25 @@ def init_db():
             )
         """)
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                kakao_access_token TEXT,
+                kakao_refresh_token TEXT,
+                kakao_connected_at TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS notifications (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 created_at TEXT NOT NULL,
                 code TEXT,
                 message TEXT,
-                sent_via_kakao INTEGER
+                sent_via_kakao INTEGER,
+                user_id INTEGER
             )
         """)
         conn.commit()
@@ -143,13 +158,77 @@ def upsert_last_signal(code: str, signal: str, score: float):
         conn.commit()
 
 
-def log_notification(code: str, message: str, sent_via_kakao: bool):
+def log_notification(code: str, message: str, sent_via_kakao: bool, user_id: int = None):
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO notifications (created_at, code, message, sent_via_kakao) VALUES (?, ?, ?, ?)",
-            (datetime.now().isoformat(), code, message, int(sent_via_kakao)),
+            "INSERT INTO notifications (created_at, code, message, sent_via_kakao, user_id) VALUES (?, ?, ?, ?, ?)",
+            (datetime.now().isoformat(), code, message, int(sent_via_kakao), user_id),
         )
         conn.commit()
+
+
+# ----------------------------------------------------------------------
+# 사용자 계정 (이메일/비밀번호 로그인 + 사용자별 카카오 연동)
+# ----------------------------------------------------------------------
+def _hash_password(password: str, salt: str) -> str:
+    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100_000).hex()
+
+
+def create_user(email: str, password: str):
+    salt = secrets.token_hex(16)
+    password_hash = _hash_password(password, salt)
+    with get_conn() as conn:
+        try:
+            cur = conn.execute(
+                "INSERT INTO users (email, password_hash, salt, created_at) VALUES (?, ?, ?, ?)",
+                (email.strip().lower(), password_hash, salt, datetime.now().isoformat()),
+            )
+            conn.commit()
+            return cur.lastrowid
+        except sqlite3.IntegrityError:
+            return None  # 이미 존재하는 이메일
+
+
+def get_user_by_email(email: str):
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE email=?", (email.strip().lower(),)).fetchone()
+        return dict(row) if row else None
+
+
+def get_user_by_id(user_id: int):
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def verify_password(user: dict, password: str) -> bool:
+    return _hash_password(password, user["salt"]) == user["password_hash"]
+
+
+def save_user_kakao_tokens(user_id: int, access_token: str, refresh_token: str):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE users SET kakao_access_token=?, kakao_refresh_token=?, kakao_connected_at=? WHERE id=?",
+            (access_token, refresh_token, datetime.now().isoformat(), user_id),
+        )
+        conn.commit()
+
+
+def disconnect_user_kakao(user_id: int):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE users SET kakao_access_token=NULL, kakao_refresh_token=NULL, kakao_connected_at=NULL WHERE id=?",
+            (user_id,),
+        )
+        conn.commit()
+
+
+def get_all_kakao_connected_users():
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM users WHERE kakao_access_token IS NOT NULL AND kakao_access_token != ''"
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def get_latest_signals_for_dashboard():

@@ -8,11 +8,7 @@ services:
     envVars:
       - key: ADMIN_TOKEN
         sync: false
-      - key: KAKAO_ENABLED
-        value: "false"
+      - key: SESSION_SECRET
+        sync: false
       - key: KAKAO_REST_API_KEY
-        sync: false
-      - key: KAKAO_ACCESS_TOKEN
-        sync: false
-      - key: KAKAO_REFRESH_TOKEN
         sync: false

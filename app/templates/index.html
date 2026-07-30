@@ -18,6 +18,11 @@
     <a href="/" class="active">Dashboard</a>
     <a href="/watchlist">Watchlist</a>
     <a href="/notifications">Signals</a>
+    {% if user %}
+    <a href="/account">{{ user.email }}</a>
+    {% else %}
+    <a href="/login">로그인</a>
+    {% endif %}
   </nav>
 </div>
 

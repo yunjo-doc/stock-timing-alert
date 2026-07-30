@@ -72,19 +72,32 @@ git push -u origin main
 > 스케줄러도 슬립 중에는 동작하지 않으므로, 24시간 자동분석이 꼭 필요하면
 > Render의 유료 플랜(슬립 없음)이나 Railway/Fly.io 등 다른 서비스를 고려하세요.
 
-## 카카오톡 알림 연동
+## 카카오톡 알림 연동 (사용자별 로그인 연동)
 
+이제 카카오 연동은 **각 로그인한 사용자가 본인 계정에서 직접** 연결합니다.
+(서버 하나에 토큰 하나가 아니라, 여러 사람이 각자 로그인해서 각자의 카카오
+'나와의 채팅'에 알림을 받을 수 있습니다.)
+
+**앱 관리자가 최초 1회만 할 일:**
 1. https://developers.kakao.com 에서 애플리케이션 생성
 2. 카카오 로그인 활성화 + 동의항목에서 `talk_message` 체크
-3. Render 환경변수에 `KAKAO_REST_API_KEY` 추가 후 재배포
-4. 배포된 주소로 `/kakao/authorize` 접속 → 카카오 로그인 → 자동으로
-   `/kakao/callback` 으로 이동하며 **access_token / refresh_token** 이 화면에 표시됨
-5. 표시된 값을 Render 환경변수 `KAKAO_ACCESS_TOKEN`, `KAKAO_REFRESH_TOKEN` 에 입력
-6. `KAKAO_ENABLED` 를 `true` 로 변경 후 재배포
+3. **플랫폼 설정 → Web** 에 사이트 도메인 추가 (예: `https://<서비스이름>.onrender.com`)
+4. **카카오 로그인 → Redirect URI** 에 아래 주소 추가:
+   `https://<서비스이름>.onrender.com/kakao/callback`
+5. REST API 키를 Render 환경변수 `KAKAO_REST_API_KEY` 에 등록 후 재배포
+6. Render 환경변수에 `SESSION_SECRET`(로그인 세션 암호화용 임의의 긴 문자열)도 함께 등록
 
-access_token 은 약 6시간만 유효합니다. 장기 운영 시에는 refresh_token으로
-주기적으로 갱신하는 배치 작업을 추가하시는 것을 권장합니다
-(`app/notify/kakao.py` 의 `refresh_kakao_token()` 함수를 스케줄러에 추가하면 됩니다).
+**각 사용자가 할 일 (관리자 포함):**
+1. 사이트 접속 → **로그인** → 없으면 **회원가입** (이메일/비밀번호)
+2. 상단 네비게이션의 본인 이메일 클릭 → **내 계정** 페이지
+3. **"카카오로 연동하기"** 버튼 클릭 → 카카오 로그인 화면에서 동의
+4. 자동으로 `/account` 로 돌아오며 "연결됨" 표시로 바뀜
+5. 이후 관심종목에서 매수/매도 신호가 뜨면 본인의 카카오톡 '나와의 채팅'으로 알림이 옵니다
+6. 연동을 끊고 싶으면 같은 페이지에서 **"연동 해제"**
+
+access_token은 약 6시간 후 만료되는데, 알림 전송 시점에 만료되어 있으면
+refresh_token으로 서버가 자동 갱신을 시도합니다. 만약 refresh_token까지
+만료(약 2달)됐다면 `/account` 에서 다시 연동해주세요.
 
 ## 폴더 구조
 
@@ -93,13 +106,15 @@ webapp/
 ├── app/
 │   ├── main.py              # FastAPI 앱 (라우트)
 │   ├── config.py             # 설정 로더 (config.json + 환경변수)
-│   ├── db.py                  # SQLite 저장소
-│   ├── scheduler.py            # 분석 사이클 실행 로직
-│   ├── data_source/naver.py     # 네이버 금융 크롤링
-│   ├── analysis/                # 확률/시장온도/추세/펀더멘털/리스크 (5개 모듈)
-│   ├── notify/kakao.py           # 카카오톡 알림
-│   ├── templates/                 # 대시보드 HTML (Jinja2)
-│   └── static/style.css            # 스타일
+│   ├── db.py                  # SQLite 저장소 (신호 이력 + 사용자 계정/카카오 토큰)
+│   ├── auth.py                  # 로그인 세션 헬퍼
+│   ├── scheduler.py               # 분석 사이클 실행 로직
+│   ├── dashboard_utils.py          # 대시보드 집계/차트(SVG) 생성
+│   ├── data_source/naver.py         # 네이버 금융 크롤링
+│   ├── analysis/                     # 확률/시장온도/추세/펀더멘털/리스크 (6개 모듈)
+│   ├── notify/kakao.py                # 카카오톡 알림 (사용자별 전송)
+│   ├── templates/                      # 대시보드/로그인/계정 HTML (Jinja2)
+│   └── static/style.css                 # 스타일
 ├── config.json                # 종목/임계값 설정 (민감정보 없음)
 ├── requirements.txt
 ├── render.yaml                 # Render 배포 설정
