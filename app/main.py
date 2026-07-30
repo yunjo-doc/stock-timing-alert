@@ -215,7 +215,11 @@ def signup_submit(request: Request, email: str = Form(...), password: str = Form
 def login_page(request: Request, error: str = "", next: str = "/account"):
     if auth.current_user(request):
         return RedirectResponse(url=next, status_code=303)
-    return templates.TemplateResponse(request, "login.html", {"error": error, "next": next, "user": None})
+    bell = du.bell_curve_path(1.1, width=260, height=110)
+    mb = du.maxwell_boltzmann_path(66, width=260, height=110)
+    return templates.TemplateResponse(request, "login.html", {
+        "error": error, "next": next, "user": None, "bell": bell, "mb": mb,
+    })
 
 
 @app.post("/login")
