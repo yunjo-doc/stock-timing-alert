@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>알림 이력</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <h1>투자 타이밍 알리미</h1>
+  </div>
+  <nav>
+    <a href="/">대시보드</a>
+    <a href="/watchlist">관심종목</a>
+    <a href="/notifications" class="active">알림이력</a>
+  </nav>
+</div>
+
+<div class="wrap">
+  <div class="panel">
+    <table>
+      <thead>
+        <tr><th class="mono">시각</th><th>종목</th><th>카카오전송</th><th>메시지</th></tr>
+      </thead>
+      <tbody>
+        {% for n in items %}
+        <tr>
+          <td class="mono">{{ n.created_at[:19] }}</td>
+          <td class="mono">{{ n.code }}</td>
+          <td>{{ "✅" if n.sent_via_kakao else "—" }}</td>
+          <td style="white-space:pre-wrap; font-size:12px; color:var(--muted)">{{ n.message }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" style="color:var(--muted)">아직 알림 이력이 없습니다.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</body>
+</html>

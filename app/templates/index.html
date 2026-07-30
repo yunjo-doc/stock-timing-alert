@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>주식 투자 타이밍 알리미</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <h1>투자 타이밍 알리미</h1>
+    <span class="sub">확률분포 · 시장온도 · 추세 · 펀더멘털 · 리스크</span>
+  </div>
+  <nav>
+    <a href="/" class="active">대시보드</a>
+    <a href="/watchlist">관심종목</a>
+    <a href="/notifications">알림이력</a>
+  </nav>
+</div>
+
+<div class="wrap">
+  <div class="meta-row">
+    <span>관심종목 <b>{{ watch_count }}</b>개</span>
+    <span>자동분석 주기 <b>{{ interval }}</b>분</span>
+    <span>마지막 갱신 <b>{{ now }}</b></span>
+  </div>
+
+  {% if signals %}
+  <div class="grid">
+    {% for s in signals %}
+    <div class="card {{ s.signal|lower }}">
+      <div class="card-top">
+        <div>
+          <div class="name">{{ s.name }}</div>
+          <div class="code">{{ s.code }}</div>
+        </div>
+        <span class="badge {{ s.signal|lower }}">{{ s.signal }}</span>
+      </div>
+      <div class="price-row">
+        <span class="price">{{ '{:,.0f}'.format(s.current_price or 0) }}원</span>
+        <span class="score">종합점수 <b>{{ s.final_score }}</b></span>
+      </div>
+      <ul class="reasons">
+        {% for r in (s.reasons_json | from_json)[:4] %}
+        <li>{{ r }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    아직 분석 결과가 없습니다. 스케줄러가 첫 사이클을 돌 때까지 기다리시거나,<br>
+    관리자 토큰으로 <code>POST /run-now</code> 를 호출해 즉시 실행할 수 있습니다.
+  </div>
+  {% endif %}
+
+  <div class="footer-note">
+    이 신호는 통계적 참고 지표이며 투자 조언이 아닙니다. 실제 주가는 정규분포보다
+    꼬리가 두꺼운(fat-tail) 경우가 많습니다. 투자 판단과 결과의 책임은 본인에게 있습니다.
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,79 @@
+{
+  "_설명": "민감정보(카카오 토큰 등)는 여기 넣지 마세요. 환경변수(.env)로 관리합니다.",
+
+  "watch_list": [
+    { "code": "005930", "name": "삼성전자" },
+    { "code": "000660", "name": "SK하이닉스" },
+    { "code": "035420", "name": "NAVER" },
+    { "code": "035720", "name": "카카오" },
+    { "code": "005380", "name": "현대차" },
+    { "code": "051910", "name": "LG화학" }
+  ],
+
+  "schedule": {
+    "interval_minutes": 30
+  },
+
+  "lookback_days": 120,
+
+  "probability": {
+    "oversold_z": -2.0,
+    "overbought_z": 2.0,
+    "extreme_z": 3.0,
+    "bollinger_window": 20,
+    "bollinger_k": 2.0
+  },
+
+  "market_temperature": {
+    "volume_window": 20,
+    "volume_spike_ratio": 2.0,
+    "temperature_high_percentile": 90,
+    "temperature_low_percentile": 20
+  },
+
+  "trend": {
+    "ma_short": 5,
+    "ma_mid": 20,
+    "ma_long": 60,
+    "rsi_period": 14,
+    "rsi_oversold": 30,
+    "rsi_overbought": 70,
+    "macd_fast": 12,
+    "macd_slow": 26,
+    "macd_signal": 9
+  },
+
+  "fundamental": {
+    "per_good_below": 15,
+    "per_bad_above": 30,
+    "pbr_good_below": 1.5,
+    "pbr_bad_above": 3.0,
+    "roe_good_above": 10
+  },
+
+  "risk_management": {
+    "account_capital_krw": 10000000,
+    "risk_per_trade_pct": 1.0,
+    "atr_period": 14,
+    "atr_stop_multiple": 2.0,
+    "atr_target_multiple": 3.0,
+    "max_position_pct_per_stock": 20.0
+  },
+
+  "signal": {
+    "weights": {
+      "probability": 0.30,
+      "market_temperature": 0.20,
+      "trend": 0.25,
+      "fundamental": 0.15,
+      "risk": 0.10
+    },
+    "buy_threshold": 0.55,
+    "sell_threshold": -0.55
+  },
+
+  "kakao": {
+    "enabled": false,
+    "rest_api_key": ""
+  }
+}
