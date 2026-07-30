@@ -12,6 +12,7 @@ FastAPI 메인 앱
   GET  /signup, POST /signup   회원가입
   GET  /login, POST /login      로그인
   POST /logout                   로그아웃
+  GET  /auth/kakao/login, /auth/kakao/callback  카카오 계정으로 로그인/가입
   GET  /account                    내 계정 (카카오 나에게 채팅 연동 관리)
   GET  /kakao/authorize              카카오 연동 인증 URL로 리다이렉트 (로그인 필요)
   GET  /kakao/callback                인증 후 콜백 -> 로그인한 사용자에 토큰 저장
@@ -215,11 +216,7 @@ def signup_submit(request: Request, email: str = Form(...), password: str = Form
 def login_page(request: Request, error: str = "", next: str = "/account"):
     if auth.current_user(request):
         return RedirectResponse(url=next, status_code=303)
-    bell = du.bell_curve_path(1.1, width=260, height=110)
-    mb = du.maxwell_boltzmann_path(66, width=260, height=110)
-    return templates.TemplateResponse(request, "login.html", {
-        "error": error, "next": next, "user": None, "bell": bell, "mb": mb,
-    })
+    return templates.TemplateResponse(request, "login.html", {"error": error, "next": next, "user": None})
 
 
 @app.post("/login")
@@ -235,6 +232,41 @@ def login_submit(request: Request, email: str = Form(...), password: str = Form(
 def logout_submit(request: Request):
     auth.logout_user(request)
     return RedirectResponse(url="/", status_code=303)
+
+
+# ----------------------------------------------------------------------
+# 카카오 계정으로 로그인/가입 (계정에 카카오 채팅 알림을 연동하는 /kakao/authorize 와는 별개)
+# ----------------------------------------------------------------------
+@app.get("/auth/kakao/login")
+def kakao_login_start(request: Request):
+    cfg = load_config()
+    rest_api_key = cfg["kakao"].get("rest_api_key")
+    if not rest_api_key:
+        return HTMLResponse("환경변수 KAKAO_REST_API_KEY가 설정되어 있지 않습니다.", status_code=400)
+
+    redirect_uri = str(request.base_url).rstrip("/") + "/auth/kakao/callback"
+    url = kakao_mod.get_authorize_url(rest_api_key, redirect_uri, scope="profile_nickname")
+    return RedirectResponse(url)
+
+
+@app.get("/auth/kakao/callback", response_class=HTMLResponse)
+def kakao_login_callback(request: Request, code: str = ""):
+    cfg = load_config()
+    rest_api_key = cfg["kakao"].get("rest_api_key")
+    redirect_uri = str(request.base_url).rstrip("/") + "/auth/kakao/callback"
+
+    try:
+        token_data = kakao_mod.exchange_code_for_token(rest_api_key, code, redirect_uri)
+        profile = kakao_mod.get_user_profile(token_data["access_token"])
+    except Exception as e:
+        return RedirectResponse(url=f"/login?error={quote('카카오 로그인에 실패했습니다: ' + str(e))}", status_code=303)
+
+    kakao_id = str(profile.get("id"))
+    user = db.get_user_by_kakao_id(kakao_id)
+    user_id = user["id"] if user else db.create_user_from_kakao(kakao_id)
+
+    auth.login_user(request, user_id)
+    return RedirectResponse(url="/account", status_code=303)
 
 
 # ----------------------------------------------------------------------

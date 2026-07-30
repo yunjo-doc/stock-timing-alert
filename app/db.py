@@ -125,6 +125,17 @@ def init_db():
         """)
         conn.commit()
 
+    with get_conn() as conn:
+        _ensure_column(conn, "users", "kakao_id", "TEXT")
+        conn.commit()
+
+
+def _ensure_column(conn, table: str, column: str, coltype: str):
+    """기존 DB에 새 컬럼을 안전하게 추가 (이미 있으면 아무 것도 하지 않음)"""
+    cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {coltype}")
+
 
 @contextmanager
 def get_conn():
@@ -238,6 +249,26 @@ def get_user_by_id(user_id: int):
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
         return dict(row) if row else None
+
+
+def get_user_by_kakao_id(kakao_id: str):
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE kakao_id=?", (str(kakao_id),)).fetchone()
+        return dict(row) if row else None
+
+
+def create_user_from_kakao(kakao_id: str):
+    """카카오 로그인 전용 계정 생성 (이메일/비밀번호 로그인은 사용하지 않는 임의 값으로 채움)"""
+    salt = secrets.token_hex(16)
+    password_hash = _hash_password(secrets.token_hex(16), salt)
+    placeholder_email = f"kakao_{kakao_id}@kakao.local"
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO users (email, password_hash, salt, kakao_id, created_at) VALUES (?, ?, ?, ?, ?)",
+            (placeholder_email, password_hash, salt, str(kakao_id), datetime.now().isoformat()),
+        )
+        conn.commit()
+        return cur.lastrowid
 
 
 def verify_password(user: dict, password: str) -> bool:

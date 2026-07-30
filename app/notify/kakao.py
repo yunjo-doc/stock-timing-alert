@@ -16,11 +16,18 @@ from .. import db
 KAKAO_AUTH_URL = "https://kauth.kakao.com/oauth/authorize"
 KAKAO_TOKEN_URL = "https://kauth.kakao.com/oauth/token"
 KAKAO_SEND_URL = "https://kapi.kakao.com/v2/api/talk/memo/default/send"
+KAKAO_USER_ME_URL = "https://kapi.kakao.com/v2/user/me"
 
 
-def get_authorize_url(rest_api_key: str, redirect_uri: str) -> str:
+def get_authorize_url(rest_api_key: str, redirect_uri: str, scope: str = "talk_message") -> str:
     return (f"{KAKAO_AUTH_URL}?client_id={rest_api_key}"
-            f"&redirect_uri={redirect_uri}&response_type=code&scope=talk_message")
+            f"&redirect_uri={redirect_uri}&response_type=code&scope={scope}")
+
+
+def get_user_profile(access_token: str) -> dict:
+    resp = requests.get(KAKAO_USER_ME_URL, headers={"Authorization": f"Bearer {access_token}"})
+    resp.raise_for_status()
+    return resp.json()
 
 
 def exchange_code_for_token(rest_api_key: str, code: str, redirect_uri: str) -> dict:

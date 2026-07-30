@@ -6,215 +6,176 @@
 <title>로그인 — AlphaTiming</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
-.auth-page { display: flex; min-height: 100vh; }
-
-.auth-hero {
-  flex: 1.15; display: flex; align-items: center; justify-content: center;
-  padding: 48px; position: relative; overflow: hidden;
+.auth-page {
+  min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+  padding: 40px 20px 60px; position: relative; overflow: hidden;
 }
-.ticker-strip {
-  position: absolute; top: 22px; left: 0; right: 0; padding: 0 32px;
-  display: flex; gap: 26px; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted-2);
-  opacity: .7; white-space: nowrap;
+
+.auth-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.auth-logo-text { font-size: 26px; font-weight: 800; letter-spacing: -0.01em; color: var(--text); }
+.auth-tagline {
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 32px;
 }
-.ticker-strip .up { color: var(--accent); }
-.ticker-strip .down { color: var(--danger); }
 
-.hero-grid {
-  display: grid; grid-template-columns: 1.35fr 1fr; grid-template-rows: auto auto; gap: 14px;
-  max-width: 560px; width: 100%;
+.auth-card {
+  width: 100%; max-width: 380px; padding: 28px 26px; position: relative; z-index: 1;
 }
-.hero-card { padding: 16px 18px; }
-.hero-card .hc-title { font-size: 11.5px; color: var(--muted); margin-bottom: 10px; letter-spacing: .02em; }
-.hero-card.span2 { grid-column: 1 / -1; }
+.auth-card h2 { font-size: 19px; margin: 0 0 4px; text-align: center; }
+.auth-card .auth-sub { font-size: 12.5px; color: var(--muted); text-align: center; margin: 0 0 22px; }
 
-.candles { display: block; }
-.candles rect { }
-
-.gauge-wrap { display: flex; flex-direction: column; align-items: center; }
-.gauge-label { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 4px; }
-
-.volume-bars { display: flex; align-items: flex-end; gap: 5px; height: 62px; }
-.volume-bars > span { flex: 1; border-radius: 2px 2px 0 0; background: linear-gradient(180deg, var(--secondary), var(--accent)); opacity: .85; }
-
-.auth-panel {
-  flex: 1; display: flex; flex-direction: column; justify-content: center;
-  padding: 48px 56px; border-left: 1px solid var(--line);
-  background: rgba(255,255,255,0.01);
+.field { position: relative; margin-bottom: 12px; }
+.field input { width: 100%; padding-left: 38px; }
+.field .field-ic {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  color: var(--muted-2); font-size: 14px; pointer-events: none;
 }
-.auth-brand h1 { font-size: 30px; margin: 0 0 4px; letter-spacing: -0.01em; }
-.auth-brand .tagline { color: var(--muted); font-size: 13.5px; margin: 0 0 26px; }
-.auth-headline { font-size: 24px; line-height: 1.4; font-weight: 700; margin: 0 0 20px; }
-.auth-features { list-style: none; padding: 0; margin: 0 0 28px; display: flex; flex-direction: column; gap: 9px; }
-.auth-features li { font-size: 13.5px; color: #C9CFDC; display: flex; align-items: center; gap: 9px; }
-.auth-features li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); flex-shrink: 0; }
+.pw-row { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 16px; }
+.pw-row a { font-size: 11.5px; color: var(--secondary); text-decoration: none; }
 
-.guide-btn {
-  margin-top: 18px; width: 100%; background: transparent; color: var(--secondary);
-  border: 1px solid rgba(76,201,240,0.35); display: flex; align-items: center; justify-content: center; gap: 8px;
+.auth-card form button[type=submit] { width: 100%; padding: 11px 0; font-size: 13.5px; }
+
+.divider { display: flex; align-items: center; gap: 12px; margin: 20px 0 16px; }
+.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.divider span { font-size: 11px; color: var(--muted-2); }
+
+.social-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 10px 0; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+  text-decoration: none; cursor: pointer; margin-bottom: 10px; border: 1px solid var(--line-strong);
+  background: var(--card-solid); color: var(--text);
 }
-.guide-btn:hover { background: var(--secondary-dim); }
+.social-btn.kakao { background: #FEE500; border-color: #FEE500; color: #191600; }
+.social-btn.google { background: #FFFFFF; }
+.social-btn.apple { background: #111111; color: #fff; border-color: #111111; }
+.social-hidden { display: none; }
+
+.auth-links { text-align: center; font-size: 12.5px; color: var(--muted); margin-top: 16px; }
+.auth-links a { color: var(--secondary); text-decoration: none; }
+
+.auth-footer { max-width: 380px; width: 100%; text-align: center; margin-top: 26px; position: relative; z-index: 1; }
+.guide-link {
+  background: transparent; border: none; color: var(--secondary); font-size: 12.5px;
+  cursor: pointer; padding: 6px 0; font-family: var(--font-display);
+}
+.legal { font-size: 11px; color: var(--muted-2); margin-top: 10px; }
+
+.auth-deco { display: none; }
+
+@media (min-width: 900px) {
+  .auth-page { padding-top: 64px; }
+  .auth-deco {
+    display: block; position: absolute; right: 8%; top: 44%; transform: translateY(-50%);
+    opacity: 0.9;
+  }
+}
 
 .modal-overlay {
   display: none; position: fixed; inset: 0; z-index: 100;
-  background: rgba(4,5,10,0.72); backdrop-filter: blur(4px);
-  align-items: center; justify-content: center; padding: 24px;
+  background: rgba(15,23,42,0.45); backdrop-filter: blur(4px);
+  align-items: center; justify-content: center; padding: 20px;
 }
 .modal-overlay.open { display: flex; }
 .modal-panel {
   width: 100%; max-width: 720px; max-height: 84vh; overflow-y: auto;
   background: var(--card-solid); border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg); box-shadow: 0 30px 60px -20px rgba(0,0,0,0.6);
+  border-radius: var(--radius-lg); box-shadow: 0 30px 60px -20px rgba(15,23,42,0.35);
 }
 .modal-header {
   position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between;
-  padding: 20px 26px; border-bottom: 1px solid var(--line); background: var(--card-solid);
+  padding: 18px 22px; border-bottom: 1px solid var(--line); background: var(--card-solid);
 }
-.modal-header h2 { font-size: 15.5px; margin: 0; }
+.modal-header h2 { font-size: 14.5px; margin: 0; }
 .modal-close {
   background: transparent; border: none; color: var(--muted); font-size: 18px; cursor: pointer;
   padding: 4px 8px; line-height: 1;
 }
 .modal-close:hover { color: var(--text); }
-.modal-body { padding: 8px 26px 30px; font-size: 13.5px; line-height: 1.8; color: #C9CFDC; }
-.modal-body h3 { font-size: 15px; color: var(--text); margin: 26px 0 10px; }
-.modal-body h4 { font-size: 13.5px; color: var(--secondary); margin: 18px 0 8px; }
+.modal-body { padding: 8px 22px 28px; font-size: 13.3px; line-height: 1.8; color: #334155; }
+.modal-body h3 { font-size: 14.5px; color: var(--text); margin: 24px 0 10px; }
+.modal-body h4 { font-size: 13px; color: var(--secondary); margin: 16px 0 8px; }
 .modal-body p { margin: 0 0 12px; }
-.modal-body p.flow { font-family: var(--font-mono); font-size: 12.5px; color: var(--accent); background: rgba(0,229,168,0.06); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 9px 12px; }
+.modal-body p.flow { font-family: var(--font-mono); font-size: 12px; color: var(--accent); background: var(--accent-dim); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 9px 12px; }
 .modal-body ul { margin: 0 0 14px; padding-left: 20px; }
 .modal-body li { margin-bottom: 5px; }
 .modal-body table { margin: 4px 0 16px; }
-.modal-body hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
+.modal-body hr { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
 .modal-body b { color: var(--text); }
 
-@media (max-width: 980px) {
-  .auth-page { flex-direction: column; }
-  .auth-hero { padding: 32px 20px 0; }
-  .auth-panel { padding: 32px 24px 48px; border-left: none; border-top: 1px solid var(--line); }
-  .ticker-strip { display: none; }
+@media (max-width: 420px) {
+  .auth-card { padding: 22px 18px; }
 }
 </style>
 </head>
 <body>
 
 <div class="auth-page">
+  <svg class="auth-deco" width="220" height="180" viewBox="0 0 220 180" fill="none">
+    <g opacity="0.85">
+      <rect x="6" y="90" width="14" height="50" rx="2" fill="var(--secondary-dim)"/>
+      <rect x="26" y="70" width="14" height="70" rx="2" fill="var(--secondary-dim)"/>
+      <rect x="46" y="50" width="14" height="90" rx="2" fill="var(--secondary)"/>
+      <polyline points="4,100 30,60 60,75 95,20" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <polygon points="95,20 108,24 99,34" fill="var(--accent)"/>
+    </g>
+    <circle cx="150" cy="45" r="26" fill="none" stroke="var(--warning-dim)" stroke-width="10"/>
+    <path d="M150,19 A26,26 0 0 1 174,52" fill="none" stroke="var(--warning)" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="185" cy="120" r="20" fill="none" stroke="var(--line-strong)" stroke-width="3"/>
+    <line x1="185" y1="120" x2="185" y2="107" stroke="var(--secondary)" stroke-width="3" stroke-linecap="round"/>
+    <line x1="185" y1="120" x2="194" y2="124" stroke="var(--secondary)" stroke-width="3" stroke-linecap="round"/>
+  </svg>
 
-  <div class="auth-hero">
-    <div class="ticker-strip">
-      <span class="up">▲2.59%</span><span>67.8.30</span><span class="down">▼9.98%</span>
-      <span class="up">KOSPI ▲45.53</span><span>424.60</span><span class="down">▼0.98%</span>
-      <span class="up">NASDAQ ▲1093.40</span><span class="up">▲9.0%</span>
+  <div class="auth-logo fade-in">
+    <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+      <polyline points="3,26 11,17 16,21 24,9" fill="none" stroke="#1E3A8A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <polygon points="24,9 31,7 27,15" fill="#D4A24C"/>
+    </svg>
+    <span class="auth-logo-text">AlphaTiming</span>
+  </div>
+  <p class="auth-tagline fade-in">AI 기반 투자 타이밍 분석 플랫폼</p>
+
+  <div class="glass auth-card fade-in">
+    <h2>AlphaTiming 로그인</h2>
+    <p class="auth-sub">데이터로 증명하는 최적의 투자 타이밍</p>
+
+    {% if error %}
+    <div style="color:var(--danger); font-size:12.5px; margin-bottom:14px; text-align:center;">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/login">
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="field">
+        <span class="field-ic">✉</span>
+        <input type="email" name="email" placeholder="이메일" required>
+      </div>
+      <div class="field" style="margin-bottom:6px;">
+        <span class="field-ic">🔒</span>
+        <input type="password" name="password" placeholder="비밀번호" required>
+      </div>
+      <div class="pw-row"><a href="/signup">비밀번호를 잊으셨나요?</a></div>
+      <button type="submit">로그인</button>
+    </form>
+
+    <div class="divider"><span>또는</span></div>
+
+    <a href="/auth/kakao/login" class="social-btn kakao">💬 카카오로 로그인</a>
+
+    <!-- Google/Apple 로그인: 외부 개발자 자격증명(Client ID 등) 확보 전까지 숨김.
+         실제 연동 준비가 되면 이 div의 "social-hidden" 클래스만 제거하면 노출됩니다. -->
+    <div class="social-hidden">
+      <button type="button" class="social-btn google">G Continue with Google</button>
+      <button type="button" class="social-btn apple">⌘ Continue with Apple</button>
     </div>
 
-    <div class="hero-grid">
-      <div class="glass hero-card span2 fade-in">
-        <div class="hc-title">AI Financial Chart</div>
-        <svg class="candles" viewBox="0 0 300 130" width="100%" height="120" preserveAspectRatio="none">
-          <line x1="22" y1="105" x2="10" y2="120" stroke="var(--danger)" stroke-width="1.5"/>
-          <rect x="10" y="100" width="14" height="15" fill="var(--danger)"/>
-          <rect x="34" y="95" width="14" height="13" fill="var(--accent)"/>
-          <rect x="58" y="90" width="14" height="12" fill="var(--accent)"/>
-          <rect x="82" y="98" width="14" height="12" fill="var(--danger)"/>
-          <rect x="106" y="80" width="14" height="15" fill="var(--accent)"/>
-          <rect x="130" y="70" width="14" height="15" fill="var(--accent)"/>
-          <rect x="154" y="75" width="14" height="15" fill="var(--danger)"/>
-          <rect x="178" y="55" width="14" height="17" fill="var(--accent)"/>
-          <rect x="202" y="45" width="14" height="15" fill="var(--accent)"/>
-          <rect x="226" y="50" width="14" height="15" fill="var(--danger)"/>
-          <rect x="250" y="30" width="14" height="18" fill="var(--accent)"/>
-          <rect x="274" y="18" width="14" height="17" fill="var(--accent)"/>
-          <polyline points="17,107 41,101 65,96 89,104 113,87 137,77 161,82 185,63 209,52 233,57 257,39 281,26"
-                    fill="none" stroke="var(--secondary)" stroke-width="1.5" opacity="0.8"/>
-        </svg>
-      </div>
-
-      <div class="glass hero-card fade-in">
-        <div class="hc-title">Normal Distribution Curve</div>
-        <svg viewBox="0 0 {{ bell.width }} {{ bell.height }}" width="100%" height="90">
-          <polygon points="{{ bell.area_points }}" fill="var(--secondary)" opacity="0.16"></polygon>
-          <polyline points="{{ bell.line_points }}" fill="none" stroke="var(--secondary)" stroke-width="2"></polyline>
-          <circle cx="{{ bell.marker_x }}" cy="{{ bell.marker_y }}" r="4" fill="var(--secondary)"></circle>
-        </svg>
-      </div>
-
-      <div class="glass hero-card fade-in">
-        <div class="hc-title">Maxwell–Boltzmann Distribution</div>
-        <svg viewBox="0 0 {{ mb.width }} {{ mb.height }}" width="100%" height="90">
-          <polygon points="{{ mb.area_points }}" fill="var(--accent)" opacity="0.16"></polygon>
-          <polyline points="{{ mb.line_points }}" fill="none" stroke="var(--accent)" stroke-width="2"></polyline>
-          <circle cx="{{ mb.marker_x }}" cy="{{ mb.marker_y }}" r="4" fill="var(--accent)"></circle>
-        </svg>
-      </div>
-
-      <div class="glass hero-card fade-in">
-        <div class="hc-title">Market Temperature</div>
-        <div class="gauge-wrap">
-          <svg viewBox="0 0 120 68" width="140" height="76">
-            <defs>
-              <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stop-color="var(--secondary)"/>
-                <stop offset="55%" stop-color="var(--warning)"/>
-                <stop offset="100%" stop-color="var(--danger)"/>
-              </linearGradient>
-            </defs>
-            <path d="M10,62 A50,50 0 0 1 110,62" fill="none" stroke="url(#gaugeGrad)" stroke-width="9" stroke-linecap="round"/>
-            <line x1="60" y1="62" x2="86" y2="28" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
-            <circle cx="60" cy="62" r="4" fill="#fff"/>
-          </svg>
-          <div class="gauge-label">변동성 확대 국면</div>
-        </div>
-      </div>
-
-      <div class="glass hero-card span2 fade-in">
-        <div class="hc-title">Trading Volume Histogram</div>
-        <div class="volume-bars">
-          <span style="height:35%"></span><span style="height:52%"></span><span style="height:40%"></span>
-          <span style="height:68%"></span><span style="height:48%"></span><span style="height:80%"></span>
-          <span style="height:60%"></span><span style="height:90%"></span><span style="height:55%"></span>
-          <span style="height:72%"></span><span style="height:45%"></span><span style="height:63%"></span>
-          <span style="height:38%"></span><span style="height:58%"></span><span style="height:83%"></span>
-        </div>
-      </div>
-    </div>
+    <div class="auth-links">계정이 없으신가요? <a href="/signup">회원가입</a></div>
   </div>
 
-  <div class="auth-panel">
-    <div class="auth-brand fade-in">
-      <h1>AlphaTiming</h1>
-      <p class="tagline">AI 기반 투자 타이밍 분석 플랫폼</p>
-    </div>
-    <div class="auth-headline fade-in">데이터 기반 투자,<br>확률로 분석하다.</div>
-    <ul class="auth-features fade-in">
-      <li>실시간 AI 분석</li>
-      <li>시장 온도 분석</li>
-      <li>매수·매도 시그널</li>
-      <li>기관·외국인 수급 분석</li>
-    </ul>
-
-    <div class="glass panel fade-in">
-      {% if error %}
-      <div style="color:var(--danger); font-size:12.5px; margin-bottom:14px;">{{ error }}</div>
-      {% endif %}
-      <form method="post" action="/login">
-        <input type="hidden" name="next" value="{{ next }}">
-        <div style="margin-bottom:12px;">
-          <input type="text" name="email" placeholder="이메일" required style="width:100%">
-        </div>
-        <div style="margin-bottom:16px;">
-          <input type="password" name="password" placeholder="비밀번호" required style="width:100%">
-        </div>
-        <button type="submit" style="width:100%">로그인</button>
-      </form>
-      <div style="margin-top:16px; font-size:12.5px; color:var(--muted);">
-        계정이 없으신가요? <a href="/signup" style="color:var(--secondary)">회원가입</a>
-      </div>
-    </div>
-
-    <button type="button" class="guide-btn" onclick="document.getElementById('guideModal').classList.add('open')">
+  <div class="auth-footer">
+    <button type="button" class="guide-link" onclick="document.getElementById('guideModal').classList.add('open')">
       ✦ 맥스웰-볼츠만 · 정규분포 투자 활용 가이드 보기
     </button>
+    <div class="legal">이용약관 · 개인정보처리방침</div>
   </div>
-
 </div>
 
 <div id="guideModal" class="modal-overlay" onclick="if(event.target===this) this.classList.remove('open')">

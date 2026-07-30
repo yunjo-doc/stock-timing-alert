@@ -5,6 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AlphaTiming — 투자 타이밍 알리미</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>
+.hero-band {
+  display: flex; flex-direction: column; gap: 14px; padding: 26px 4px 30px;
+}
+.hero-band h2 { font-size: 24px; margin: 0; letter-spacing: -0.01em; }
+.hero-band p { font-size: 13.5px; color: var(--muted); margin: 0; }
+.hero-cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.hero-cta button.ghost { background: transparent; border: 1px solid rgba(37,99,235,0.4); color: var(--secondary); }
+@media (min-width: 720px) {
+  .hero-band h2 { font-size: 30px; }
+  .hero-band p { font-size: 14.5px; }
+}
+.rec-badge {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 20px; font-weight: 800;
+  padding: 8px 18px; border-radius: 999px; margin-bottom: 4px;
+}
+.rec-badge.buy { background: var(--accent-dim); color: var(--accent); }
+.rec-badge.sell { background: var(--danger-dim); color: var(--danger); }
+.rec-badge.hold { background: var(--warning-dim); color: var(--warning); }
+.rec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+</style>
 </head>
 <body>
 
@@ -14,6 +35,7 @@
     <h1>AlphaTiming</h1>
     <span class="sub">확률분포 · 시장온도 · 추세 · 펀더멘털 · 리스크</span>
   </div>
+  <button class="nav-toggle" onclick="this.nextElementSibling.classList.toggle('open')">☰</button>
   <nav>
     <a href="/" class="active">Dashboard</a>
     <a href="/watchlist">Watchlist</a>
@@ -28,6 +50,15 @@
 </div>
 
 <div class="wrap">
+  <div class="hero-band fade-in">
+    <h2>AI 기반 투자 타이밍 분석</h2>
+    <p>데이터 기반 AI가 확률분포·시장온도·추세·펀더멘털·리스크를 종합해 최적의 투자 시점을 분석합니다.</p>
+    <div class="hero-cta">
+      <a href="{{ '/watchlist' if user else '/signup' }}"><button type="button">무료 분석 시작</button></a>
+      <a href="/pricing"><button type="button" class="ghost">프리미엄 보기</button></a>
+    </div>
+  </div>
+
   <div class="meta-row">
     <div class="meta-left">
       <span>관심종목 <b>{{ watch_count }}</b>개</span>
@@ -42,8 +73,15 @@
 
   {% if not signals %}
   <div class="empty" style="margin-top:24px">
+    <div style="font-size:28px; margin-bottom:10px;">📊</div>
     아직 분석 결과가 없습니다.<br>
-    관리자 토큰으로 <code>POST /run-now</code> 를 호출해 첫 분석을 실행해보세요.
+    {% if user %}
+    관심종목을 추가하고 "지금 갱신"으로 첫 분석을 실행해보세요.
+    <div style="margin-top:16px"><a href="/watchlist"><button type="button">관심종목 추가하기</button></a></div>
+    {% else %}
+    회원가입하고 관심종목을 등록하면 AI 분석 결과를 볼 수 있습니다.
+    <div style="margin-top:16px"><a href="/signup"><button type="button">무료로 시작하기</button></a></div>
+    {% endif %}
   </div>
   {% else %}
 
@@ -51,9 +89,9 @@
   <div class="section-title"><span class="n">01</span> Market Summary</div>
   <div class="summary-grid">
     <div class="glass summary-card fade-in">
-      <div class="label"><span class="icon teal">◆</span>Overall Market Score</div>
-      <div class="value">{{ summary.overall_score_10 }}<span class="unit">/ 10</span></div>
-      <div class="footline">{{ summary.buy_count }} 매수 · {{ summary.sell_count }} 매도 · {{ summary.hold_count }} 관망</div>
+      <div class="label"><span class="icon blue">⚡</span>Today's Signal</div>
+      <div class="value" style="font-size:22px">{{ summary.dominant_signal }}</div>
+      <div class="footline">관심종목 {{ watch_count }}개 중 우세 신호</div>
     </div>
     <div class="glass summary-card fade-in" style="animation-delay:.05s">
       <div class="label"><span class="icon amber">☀</span>Market Temperature</div>
@@ -63,14 +101,14 @@
       </div>
     </div>
     <div class="glass summary-card fade-in" style="animation-delay:.1s">
+      <div class="label"><span class="icon teal">◆</span>AI Confidence</div>
+      <div class="value">{{ (summary.overall_score_10 * 10)|round(0)|int }}<span class="unit">%</span></div>
+      <div class="footline">{{ summary.buy_count }} 매수 · {{ summary.sell_count }} 매도 · {{ summary.hold_count }} 관망</div>
+    </div>
+    <div class="glass summary-card fade-in" style="animation-delay:.15s">
       <div class="label"><span class="icon coral">⚠</span>Risk Level</div>
       <div class="value" style="font-size:22px">{{ summary.risk_level }}</div>
       <div class="footline">리스크관리 점수 기반 종합 판단</div>
-    </div>
-    <div class="glass summary-card fade-in" style="animation-delay:.15s">
-      <div class="label"><span class="icon blue">⚡</span>Today's Signal</div>
-      <div class="value" style="font-size:22px">{{ summary.dominant_signal }}</div>
-      <div class="footline">관심종목 {{ watch_count }}개 중 우세 신호</div>
     </div>
   </div>
 
@@ -97,14 +135,30 @@
       </svg>
     </div>
     <div class="glass confidence-panel fade-in" style="animation-delay:.1s">
-      <div class="confidence-row">
-        <div class="k">Current Price</div>
-        <div class="v">{{ '{:,.0f}'.format(featured.current_price or 0) }}원</div>
-      </div>
+      <div class="chart-title" style="margin-bottom:0">Today's Recommendation</div>
+      <span class="rec-badge {{ featured.signal|lower }}">{{ featured.signal }}</span>
       <div class="confidence-row">
         <div class="k">Confidence Score</div>
         <div class="v">{{ ((featured.final_score or 0)|abs * 100)|round(1) }}%</div>
         <div class="confidence-bar"><span style="width:{{ ((featured.final_score or 0)|abs * 100)|round(0) }}%"></span></div>
+      </div>
+      <div class="rec-grid">
+        <div class="confidence-row">
+          <div class="k">Current Price</div>
+          <div class="v" style="font-size:14px">{{ '{:,.0f}'.format(featured.current_price or 0) }}원</div>
+        </div>
+        <div class="confidence-row">
+          <div class="k">Risk</div>
+          <div class="v" style="font-size:14px">{{ summary.risk_level }}</div>
+        </div>
+        <div class="confidence-row">
+          <div class="k">Target Price</div>
+          <div class="v" style="font-size:14px">{{ '{:,.0f}'.format(featured.target_price) if featured.target_price else '—' }}원</div>
+        </div>
+        <div class="confidence-row">
+          <div class="k">Stop Loss</div>
+          <div class="v" style="font-size:14px">{{ '{:,.0f}'.format(featured.stop_loss) if featured.stop_loss else '—' }}원</div>
+        </div>
       </div>
     </div>
   </div>
