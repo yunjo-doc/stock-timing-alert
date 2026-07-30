@@ -91,18 +91,15 @@ def _is_admin_session(request: Request) -> bool:
 # ----------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/", status_code=303)
+
     cfg = load_config()
     all_signals = db.get_latest_signals_for_dashboard()
-    user = auth.current_user(request)
-
-    if user:
-        my_codes = {w["code"] for w in db.get_user_watchlist(user["id"])}
-        signals = [s for s in all_signals if s["code"] in my_codes]
-        watch_count = len(my_codes)
-    else:
-        preview_codes = {s["code"] for s in cfg["watch_list"]}
-        signals = [s for s in all_signals if s["code"] in preview_codes]
-        watch_count = len(preview_codes)
+    my_codes = {w["code"] for w in db.get_user_watchlist(user["id"])}
+    signals = [s for s in all_signals if s["code"] in my_codes]
+    watch_count = len(my_codes)
 
     summary = du.market_summary(signals)
     featured = du.pick_featured_stock(signals)
@@ -129,7 +126,7 @@ def dashboard(request: Request):
         "interval": cfg["schedule"]["interval_minutes"],
         "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "user": user,
-        "plan": billing_plans.get_plan(db.get_user_plan_key(user["id"])) if user else None,
+        "plan": billing_plans.get_plan(db.get_user_plan_key(user["id"])),
     })
 
 
