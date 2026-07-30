@@ -16,11 +16,20 @@ FastAPI 메인 앱
   GET  /kakao/authorize              카카오 연동 인증 URL로 리다이렉트 (로그인 필요)
   GET  /kakao/callback                인증 후 콜백 -> 로그인한 사용자에 토큰 저장
   POST /kakao/disconnect                카카오 연동 해제
+  GET  /pricing                          요금제 안내
+  GET  /billing/checkout                  카드 등록(빌링키 발급) 화면 (로그인 필요)
+  GET  /billing/success, /billing/fail     Toss 빌링 인증 콜백
+  POST /billing/cancel                      구독 해지
+  GET  /admin/login, POST /admin/login       관리자 로그인 (ADMIN_TOKEN)
+  POST /admin/logout                          관리자 로그아웃
+  GET  /admin/members                          회원현황(관심종목/매수·매도 제안일/구독) 대시보드
   GET  /api/signals              최신 신호 JSON (외부 연동용)
 """
 
 import os
-from datetime import datetime
+import uuid
+from datetime import datetime, timedelta
+from urllib.parse import quote
 
 from fastapi import FastAPI, Request, Form, Header, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
@@ -30,13 +39,17 @@ from starlette.middleware.sessions import SessionMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from .config import load_config, save_config, BASE_DIR
-from .scheduler import run_analysis_cycle
+from .scheduler import run_analysis_cycle, run_billing_cycle
 from . import db
 from . import dashboard_utils as du
 from . import auth
 from .notify import kakao as kakao_mod
+from .billing import plans as billing_plans
+from .billing import toss as toss_client
 
-app = FastAPI(title="주식 투자 타이밍 알리미")
+BILLING_PERIOD_DAYS = 30
+
+app = FastAPI(title="AlphaTiming")
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "dev-insecure-secret-change-me"))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "app", "templates"))
 templates.env.filters["from_json"] = lambda s: __import__("json").loads(s) if s else []
@@ -52,8 +65,10 @@ def on_startup():
     interval = cfg["schedule"]["interval_minutes"]
     _scheduler.add_job(lambda: run_analysis_cycle(load_config()), "interval",
                         minutes=interval, id="analysis_cycle", replace_existing=True)
+    _scheduler.add_job(run_billing_cycle, "interval",
+                        hours=24, id="billing_cycle", replace_existing=True)
     _scheduler.start()
-    print(f"[스케줄러 시작] {interval}분 주기로 자동 분석을 실행합니다.")
+    print(f"[스케줄러 시작] {interval}분 주기로 자동 분석을, 24시간 주기로 정기결제를 실행합니다.")
 
 
 @app.on_event("shutdown")
@@ -66,13 +81,27 @@ def _check_admin(token: str, cfg: dict):
         raise HTTPException(status_code=401, detail="관리자 토큰이 올바르지 않습니다.")
 
 
+def _is_admin_session(request: Request) -> bool:
+    return bool(request.session.get("is_admin"))
+
+
 # ----------------------------------------------------------------------
 # 대시보드
 # ----------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     cfg = load_config()
-    signals = db.get_latest_signals_for_dashboard()
+    all_signals = db.get_latest_signals_for_dashboard()
+    user = auth.current_user(request)
+
+    if user:
+        my_codes = {w["code"] for w in db.get_user_watchlist(user["id"])}
+        signals = [s for s in all_signals if s["code"] in my_codes]
+        watch_count = len(my_codes)
+    else:
+        preview_codes = {s["code"] for s in cfg["watch_list"]}
+        signals = [s for s in all_signals if s["code"] in preview_codes]
+        watch_count = len(preview_codes)
 
     summary = du.market_summary(signals)
     featured = du.pick_featured_stock(signals)
@@ -95,10 +124,11 @@ def dashboard(request: Request):
         "bell": bell,
         "mb": mb,
         "recent_alerts": recent_alerts,
-        "watch_count": len(cfg["watch_list"]),
+        "watch_count": watch_count,
         "interval": cfg["schedule"]["interval_minutes"],
         "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "user": auth.current_user(request),
+        "user": user,
+        "plan": billing_plans.get_plan(db.get_user_plan_key(user["id"])) if user else None,
     })
 
 
@@ -112,27 +142,47 @@ def notifications_page(request: Request):
 # 관심종목 관리
 # ----------------------------------------------------------------------
 @app.get("/watchlist", response_class=HTMLResponse)
-def watchlist_page(request: Request):
-    cfg = load_config()
+def watchlist_page(request: Request, error: str = ""):
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/watchlist", status_code=303)
+
+    plan = billing_plans.get_plan(db.get_user_plan_key(user["id"]))
+    watch_list = db.get_user_watchlist(user["id"])
     return templates.TemplateResponse(request, "watchlist.html", {
-        "watch_list": cfg["watch_list"], "user": auth.current_user(request),
+        "watch_list": watch_list,
+        "user": user,
+        "plan": plan,
+        "limit_label": billing_plans.stock_limit_label(plan),
+        "at_limit": plan["stock_limit"] is not None and len(watch_list) >= plan["stock_limit"],
+        "error": error,
     })
 
 
 @app.post("/watchlist/add")
-def watchlist_add(code: str = Form(...), name: str = Form(...)):
-    cfg = load_config()
-    if not any(s["code"] == code for s in cfg["watch_list"]):
-        cfg["watch_list"].append({"code": code.strip(), "name": name.strip()})
-        save_config(cfg)
+def watchlist_add(request: Request, code: str = Form(...), name: str = Form(...)):
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/watchlist", status_code=303)
+
+    plan = billing_plans.get_plan(db.get_user_plan_key(user["id"]))
+    current_count = db.count_user_watchlist(user["id"])
+    if plan["stock_limit"] is not None and current_count >= plan["stock_limit"]:
+        msg = f"{plan['name']} 플랜은 관심종목을 최대 {plan['stock_limit']}개까지 등록할 수 있습니다. 요금제를 업그레이드해주세요."
+        return RedirectResponse(url=f"/watchlist?error={quote(msg)}", status_code=303)
+
+    added = db.add_user_watchlist(user["id"], code, name)
+    if not added:
+        return RedirectResponse(url=f"/watchlist?error={quote('이미 등록된 종목입니다')}", status_code=303)
     return RedirectResponse(url="/watchlist", status_code=303)
 
 
 @app.post("/watchlist/remove")
-def watchlist_remove(code: str = Form(...)):
-    cfg = load_config()
-    cfg["watch_list"] = [s for s in cfg["watch_list"] if s["code"] != code]
-    save_config(cfg)
+def watchlist_remove(request: Request, code: str = Form(...)):
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/watchlist", status_code=303)
+    db.remove_user_watchlist(user["id"], code)
     return RedirectResponse(url="/watchlist", status_code=303)
 
 
@@ -184,14 +234,116 @@ def logout_submit(request: Request):
 
 
 # ----------------------------------------------------------------------
-# 내 계정 (카카오 '나에게 채팅' 연동 관리)
+# 내 계정 (구독 현황 + 카카오 '나에게 채팅' 연동 관리)
 # ----------------------------------------------------------------------
 @app.get("/account", response_class=HTMLResponse)
-def account_page(request: Request):
+def account_page(request: Request, subscribed: int = 0, canceled: int = 0):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/account", status_code=303)
-    return templates.TemplateResponse(request, "account.html", {"user": user})
+
+    plan = billing_plans.get_plan(db.get_user_plan_key(user["id"]))
+    subscription = db.get_active_subscription(user["id"])
+    payments = db.get_user_payments(user["id"])
+    return templates.TemplateResponse(request, "account.html", {
+        "user": user, "plan": plan, "subscription": subscription, "payments": payments,
+        "subscribed": subscribed, "canceled": canceled,
+    })
+
+
+# ----------------------------------------------------------------------
+# 요금제 / 구독 결제 (Toss Payments 정기결제 — 빌링키 발급 후 매월 자동 청구)
+# ----------------------------------------------------------------------
+@app.get("/pricing", response_class=HTMLResponse)
+def pricing_page(request: Request):
+    user = auth.current_user(request)
+    current_plan = db.get_user_plan_key(user["id"]) if user else "free"
+    return templates.TemplateResponse(request, "pricing.html", {
+        "user": user,
+        "plans": [billing_plans.get_plan(k) for k in billing_plans.PLAN_ORDER],
+        "current_plan": current_plan,
+    })
+
+
+@app.get("/billing/checkout", response_class=HTMLResponse)
+def billing_checkout(request: Request, plan: str = ""):
+    user = auth.current_user(request)
+    if not user:
+        next_url = quote(f"/billing/checkout?plan={plan}")
+        return RedirectResponse(url=f"/login?next={next_url}", status_code=303)
+
+    plan_info = billing_plans.get_plan(plan)
+    if plan_info["key"] == "free" or plan_info["price"] <= 0:
+        return RedirectResponse(url="/pricing", status_code=303)
+
+    cfg = load_config()
+    client_key = cfg["toss"]["client_key"]
+    if not client_key:
+        return HTMLResponse(
+            "환경변수 TOSS_CLIENT_KEY가 설정되어 있지 않습니다. Render 환경변수를 확인해주세요.",
+            status_code=400,
+        )
+
+    customer_key = f"user-{user['id']}"
+    base = str(request.base_url).rstrip("/")
+    return templates.TemplateResponse(request, "billing_checkout.html", {
+        "user": user,
+        "plan": plan_info,
+        "client_key": client_key,
+        "customer_key": customer_key,
+        "success_url": f"{base}/billing/success?plan={plan_info['key']}",
+        "fail_url": f"{base}/billing/fail",
+    })
+
+
+@app.get("/billing/success", response_class=HTMLResponse)
+def billing_success(request: Request, authKey: str = "", customerKey: str = "", plan: str = ""):
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/pricing", status_code=303)
+
+    plan_info = billing_plans.get_plan(plan)
+    if not authKey or not customerKey:
+        return RedirectResponse(url=f"/billing/fail?message={quote('인증 정보가 올바르지 않습니다')}", status_code=303)
+
+    try:
+        issued = toss_client.issue_billing_key(authKey, customerKey)
+        billing_key = issued["billingKey"]
+
+        order_id = f"sub-{user['id']}-{uuid.uuid4().hex[:12]}"
+        charge = toss_client.charge_billing(
+            billing_key, customerKey, plan_info["price"], order_id,
+            f"AlphaTiming {plan_info['name']} 플랜 구독",
+        )
+    except toss_client.TossError as e:
+        return RedirectResponse(url=f"/billing/fail?message={quote(str(e))}", status_code=303)
+
+    now = datetime.now()
+    period_end = now + timedelta(days=BILLING_PERIOD_DAYS)
+    sub_id = db.create_subscription(
+        user["id"], plan_info["key"], plan_info["price"], billing_key, customerKey,
+        now.isoformat(), period_end.isoformat(),
+    )
+    db.log_payment(user["id"], sub_id, order_id, plan_info["key"], plan_info["price"],
+                    "paid", charge.get("method", "card"), "")
+
+    return RedirectResponse(url="/account?subscribed=1", status_code=303)
+
+
+@app.get("/billing/fail", response_class=HTMLResponse)
+def billing_fail(request: Request, message: str = "결제가 취소되었거나 실패했습니다."):
+    return templates.TemplateResponse(request, "billing_fail.html", {
+        "user": auth.current_user(request), "message": message,
+    })
+
+
+@app.post("/billing/cancel")
+def billing_cancel(request: Request):
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/account", status_code=303)
+    db.cancel_subscription(user["id"])
+    return RedirectResponse(url="/account?canceled=1", status_code=303)
 
 
 # ----------------------------------------------------------------------
@@ -262,3 +414,40 @@ def kakao_disconnect(request: Request):
         return RedirectResponse(url="/login?next=/account", status_code=303)
     db.disconnect_user_kakao(user["id"])
     return RedirectResponse(url="/account?disconnected=1", status_code=303)
+
+
+# ----------------------------------------------------------------------
+# 관리자: 회원현황 (ADMIN_TOKEN 로그인 필요, /run-now 와 별개의 세션 기반 로그인)
+# ----------------------------------------------------------------------
+@app.get("/admin/login", response_class=HTMLResponse)
+def admin_login_page(request: Request, error: str = ""):
+    if _is_admin_session(request):
+        return RedirectResponse(url="/admin/members", status_code=303)
+    return templates.TemplateResponse(request, "admin_login.html", {"error": error, "user": None})
+
+
+@app.post("/admin/login")
+def admin_login_submit(request: Request, token: str = Form(...)):
+    cfg = load_config()
+    if token != cfg.get("admin_token"):
+        return RedirectResponse(url=f"/admin/login?error={quote('토큰이 올바르지 않습니다')}", status_code=303)
+    request.session["is_admin"] = True
+    return RedirectResponse(url="/admin/members", status_code=303)
+
+
+@app.post("/admin/logout")
+def admin_logout(request: Request):
+    request.session.pop("is_admin", None)
+    return RedirectResponse(url="/admin/login", status_code=303)
+
+
+@app.get("/admin/members", response_class=HTMLResponse)
+def admin_members_page(request: Request):
+    if not _is_admin_session(request):
+        return RedirectResponse(url="/admin/login", status_code=303)
+    members = db.get_all_members_for_admin()
+    return templates.TemplateResponse(request, "admin_members.html", {
+        "members": members,
+        "plans": billing_plans.PLANS,
+        "user": auth.current_user(request),
+    })

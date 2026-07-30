@@ -84,6 +84,45 @@ def init_db():
                 user_id INTEGER
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_watchlist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                code TEXT NOT NULL,
+                name TEXT NOT NULL,
+                added_at TEXT NOT NULL,
+                UNIQUE(user_id, code)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                plan TEXT NOT NULL,
+                price INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                billing_key TEXT,
+                customer_key TEXT,
+                current_period_start TEXT,
+                current_period_end TEXT,
+                created_at TEXT NOT NULL,
+                canceled_at TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                subscription_id INTEGER,
+                order_id TEXT NOT NULL,
+                plan TEXT,
+                amount INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                method TEXT,
+                raw_response_json TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
         conn.commit()
 
 
@@ -256,3 +295,201 @@ def get_recent_notifications(limit=30):
             "SELECT * FROM notifications ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+# ----------------------------------------------------------------------
+# 사용자별 관심종목 (플랜별 개수 제한은 app/main.py, app/billing/plans.py 참고)
+# ----------------------------------------------------------------------
+def get_user_watchlist(user_id: int):
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM user_watchlist WHERE user_id=? ORDER BY added_at", (user_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def count_user_watchlist(user_id: int) -> int:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) as c FROM user_watchlist WHERE user_id=?", (user_id,)
+        ).fetchone()
+        return row["c"] if row else 0
+
+
+def add_user_watchlist(user_id: int, code: str, name: str) -> bool:
+    with get_conn() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO user_watchlist (user_id, code, name, added_at) VALUES (?, ?, ?, ?)",
+                (user_id, code.strip(), name.strip(), datetime.now().isoformat()),
+            )
+            conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False  # 이미 추가된 종목
+
+
+def remove_user_watchlist(user_id: int, code: str):
+    with get_conn() as conn:
+        conn.execute(
+            "DELETE FROM user_watchlist WHERE user_id=? AND code=?", (user_id, code)
+        )
+        conn.commit()
+
+
+def get_all_watched_stocks():
+    """모든 사용자의 관심종목을 코드 기준으로 중복 제거해 반환 (분석 스케줄러용)"""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT code, name FROM user_watchlist GROUP BY code ORDER BY code"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ----------------------------------------------------------------------
+# 구독 / 결제
+# ----------------------------------------------------------------------
+def get_active_subscription(user_id: int):
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM subscriptions WHERE user_id=? AND status='active' "
+            "ORDER BY id DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_user_plan_key(user_id: int) -> str:
+    sub = get_active_subscription(user_id)
+    if not sub:
+        return "free"
+    if sub["current_period_end"] and sub["current_period_end"] < datetime.now().isoformat():
+        return "free"
+    return sub["plan"]
+
+
+def create_subscription(user_id, plan, price, billing_key, customer_key, period_start, period_end):
+    with get_conn() as conn:
+        # 기존 활성 구독은 교체(취소) 처리
+        conn.execute(
+            "UPDATE subscriptions SET status='replaced', canceled_at=? WHERE user_id=? AND status='active'",
+            (datetime.now().isoformat(), user_id),
+        )
+        cur = conn.execute(
+            "INSERT INTO subscriptions (user_id, plan, price, status, billing_key, customer_key, "
+            "current_period_start, current_period_end, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (user_id, plan, price, "active", billing_key, customer_key,
+             period_start, period_end, datetime.now().isoformat()),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def renew_subscription(subscription_id, period_start, period_end):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE subscriptions SET current_period_start=?, current_period_end=?, status='active' WHERE id=?",
+            (period_start, period_end, subscription_id),
+        )
+        conn.commit()
+
+
+def mark_subscription_past_due(subscription_id):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE subscriptions SET status='past_due' WHERE id=?", (subscription_id,)
+        )
+        conn.commit()
+
+
+def cancel_subscription(user_id: int):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE subscriptions SET status='canceled', canceled_at=? WHERE user_id=? AND status IN ('active','past_due')",
+            (datetime.now().isoformat(), user_id),
+        )
+        conn.commit()
+
+
+def get_subscriptions_due_for_renewal():
+    """오늘 기준으로 결제 주기가 끝난(=갱신 결제가 필요한) 활성 구독 목록"""
+    today = datetime.now().isoformat()
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM subscriptions WHERE status IN ('active','past_due') AND current_period_end <= ?",
+            (today,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def log_payment(user_id, subscription_id, order_id, plan, amount, status, method, raw_response: str = ""):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO payments (user_id, subscription_id, order_id, plan, amount, status, method, "
+            "raw_response_json, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (user_id, subscription_id, order_id, plan, amount, status, method,
+             raw_response, datetime.now().isoformat()),
+        )
+        conn.commit()
+
+
+def get_user_payments(user_id: int, limit=20):
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM payments WHERE user_id=? ORDER BY id DESC LIMIT ?", (user_id, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ----------------------------------------------------------------------
+# 관리자용 회원 현황
+# ----------------------------------------------------------------------
+def get_last_signal_dates_for_codes(codes: list):
+    """종목코드별 최근 매수 제안일 / 매도 제안일. {code: {"last_buy":..., "last_sell":...}}"""
+    if not codes:
+        return {}
+    placeholders = ",".join("?" for _ in codes)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""SELECT code,
+                    MAX(CASE WHEN signal='BUY' THEN created_at END) as last_buy,
+                    MAX(CASE WHEN signal='SELL' THEN created_at END) as last_sell
+                FROM signals
+                WHERE code IN ({placeholders})
+                GROUP BY code""",
+            codes,
+        ).fetchall()
+        return {r["code"]: {"last_buy": r["last_buy"], "last_sell": r["last_sell"]} for r in rows}
+
+
+def get_all_members_for_admin():
+    """회원별 이메일/가입일/구독플랜/관심종목/종목별 매수·매도 제안일을 모아서 반환"""
+    with get_conn() as conn:
+        users = [dict(r) for r in conn.execute("SELECT id, email, created_at FROM users ORDER BY id DESC").fetchall()]
+
+    all_codes = set()
+    watchlist_by_user = {}
+    for u in users:
+        wl = get_user_watchlist(u["id"])
+        watchlist_by_user[u["id"]] = wl
+        all_codes.update(s["code"] for s in wl)
+
+    signal_dates = get_last_signal_dates_for_codes(list(all_codes))
+
+    members = []
+    for u in users:
+        sub = get_active_subscription(u["id"])
+        plan_key = get_user_plan_key(u["id"])
+        wl = watchlist_by_user[u["id"]]
+        for s in wl:
+            s.update(signal_dates.get(s["code"], {"last_buy": None, "last_sell": None}))
+        members.append({
+            "id": u["id"],
+            "email": u["email"],
+            "created_at": u["created_at"],
+            "plan": plan_key,
+            "subscription": sub,
+            "watchlist": wl,
+            "watchlist_count": len(wl),
+        })
+    return members

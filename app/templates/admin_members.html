@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>회원현황 — AlphaTiming Admin</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+.member-card { padding: 20px 22px; margin-bottom: 14px; }
+.member-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.member-email { font-size: 14.5px; font-weight: 700; }
+.member-meta { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.member-badges { display: flex; gap: 8px; align-items: center; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <h1>AlphaTiming Admin</h1>
+  </div>
+  <nav>
+    <a href="/">Dashboard</a>
+    <form method="post" action="/admin/logout" style="display:inline; margin-left:22px;">
+      <button type="submit" style="background:transparent; border:1px solid var(--line-strong); color:var(--muted); padding:6px 14px; font-size:12.5px;">로그아웃</button>
+    </form>
+  </nav>
+</div>
+
+<div class="wrap">
+  <div class="section-title" style="margin-top:0">회원현황 — 총 {{ members|length }}명</div>
+
+  {% if not members %}
+  <div class="empty">아직 가입한 회원이 없습니다.</div>
+  {% endif %}
+
+  {% for m in members %}
+  <div class="glass member-card fade-in">
+    <div class="member-head">
+      <div>
+        <div class="member-email">{{ m.email }}</div>
+        <div class="member-meta">
+          가입일 {{ m.created_at[:19] }} · user_id {{ m.id }}
+        </div>
+      </div>
+      <div class="member-badges">
+        <span class="chip {{ 'buy' if plans[m.plan].price > 0 else 'hold' }}">{{ plans[m.plan].name }}</span>
+        {% if m.subscription %}
+          {% if m.subscription.status == 'active' %}
+          <span class="chip buy">구독중 · 다음결제 {{ m.subscription.current_period_end[:10] }}</span>
+          {% elif m.subscription.status == 'past_due' %}
+          <span class="chip sell">결제실패 · 재시도 대기</span>
+          {% endif %}
+        {% endif %}
+        <span class="chip hold">관심종목 {{ m.watchlist_count }}개</span>
+      </div>
+    </div>
+
+    {% if m.watchlist %}
+    <table>
+      <thead>
+        <tr><th>종목코드</th><th>종목명</th><th>추가일</th><th>최근 매수 제안일</th><th>최근 매도 제안일</th></tr>
+      </thead>
+      <tbody>
+        {% for s in m.watchlist %}
+        <tr>
+          <td class="mono">{{ s.code }}</td>
+          <td>{{ s.name }}</td>
+          <td class="mono">{{ s.added_at[:10] }}</td>
+          <td class="mono">{{ s.last_buy[:16] if s.last_buy else '—' }}</td>
+          <td class="mono">{{ s.last_sell[:16] if s.last_sell else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="footer-note" style="margin-top:0; border-top:none; padding-top:0;">등록한 관심종목이 없습니다.</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+</body>
+</html>

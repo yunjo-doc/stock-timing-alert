@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>로그인 — AlphaTiming</title>
+<title>관리자 로그인 — AlphaTiming</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="dot"></span>
-    <h1>AlphaTiming</h1>
+    <h1>AlphaTiming Admin</h1>
   </div>
   <nav>
     <a href="/">Dashboard</a>
@@ -19,24 +19,17 @@
 </div>
 
 <div class="wrap" style="max-width:420px">
-  <div class="section-title" style="margin-top:40px">로그인</div>
+  <div class="section-title" style="margin-top:40px">관리자 로그인</div>
   <div class="glass panel fade-in">
     {% if error %}
     <div style="color:var(--danger); font-size:12.5px; margin-bottom:14px;">{{ error }}</div>
     {% endif %}
-    <form method="post" action="/login">
-      <input type="hidden" name="next" value="{{ next }}">
-      <div style="margin-bottom:12px;">
-        <input type="text" name="email" placeholder="이메일" required style="width:100%">
-      </div>
+    <form method="post" action="/admin/login">
       <div style="margin-bottom:16px;">
-        <input type="password" name="password" placeholder="비밀번호" required style="width:100%">
+        <input type="text" name="token" placeholder="관리자 토큰 (ADMIN_TOKEN)" required style="width:100%">
       </div>
       <button type="submit" style="width:100%">로그인</button>
     </form>
-    <div style="margin-top:16px; font-size:12.5px; color:var(--muted);">
-      계정이 없으신가요? <a href="/signup" style="color:var(--secondary)">회원가입</a>
-    </div>
   </div>
 </div>
 

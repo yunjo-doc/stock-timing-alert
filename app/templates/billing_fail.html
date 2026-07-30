@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>결제 실패 — AlphaTiming</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="dot"></span>
+    <h1>AlphaTiming</h1>
+  </div>
+  <nav>
+    <a href="/pricing">요금제</a>
+  </nav>
+</div>
+
+<div class="wrap" style="max-width:480px">
+  <div class="section-title" style="margin-top:40px">결제에 실패했습니다</div>
+  <div class="glass panel fade-in">
+    <div style="font-size:13px; color:var(--danger); margin-bottom:20px;">{{ message }}</div>
+    <a href="/pricing"><button type="button" style="width:100%">요금제로 돌아가기</button></a>
+  </div>
+</div>
+
+</body>
+</html>

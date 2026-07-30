@@ -9,13 +9,14 @@
 import json
 import os
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    load_dotenv(os.path.join(BASE_DIR, ".env"))
 except ImportError:
     pass
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -31,6 +32,11 @@ def load_config() -> dict:
     cfg["kakao"]["rest_api_key"] = os.getenv("KAKAO_REST_API_KEY", cfg["kakao"].get("rest_api_key", ""))
 
     cfg["admin_token"] = os.getenv("ADMIN_TOKEN", "change-me")
+
+    # Toss Payments 정기결제(빌링) 연동 키. TOSS_CLIENT_KEY는 프론트에 노출되는 공개키입니다.
+    cfg.setdefault("toss", {})
+    cfg["toss"]["client_key"] = os.getenv("TOSS_CLIENT_KEY", "")
+    cfg["toss"]["secret_key_set"] = bool(os.getenv("TOSS_SECRET_KEY"))
 
     return cfg
 

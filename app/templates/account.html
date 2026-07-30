@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>내 계정 — Stock Analysis</title>
+<title>내 계정 — AlphaTiming</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -11,12 +11,13 @@
 <div class="topbar">
   <div class="brand">
     <span class="dot"></span>
-    <h1>Stock Analysis</h1>
+    <h1>AlphaTiming</h1>
   </div>
   <nav>
     <a href="/">Dashboard</a>
     <a href="/watchlist">Watchlist</a>
     <a href="/notifications">Signals</a>
+    <a href="/pricing">요금제</a>
     <a href="/account" class="active">{{ user.email }}</a>
   </nav>
 </div>
@@ -24,11 +25,63 @@
 <div class="wrap" style="max-width:640px">
   <div class="section-title" style="margin-top:0">내 계정</div>
 
+  {% if subscribed %}
+  <div class="glass panel fade-in" style="border-color:var(--accent); margin-bottom:16px; padding:14px 18px; font-size:13px; color:var(--accent);">
+    구독이 시작되었습니다. 감사합니다!
+  </div>
+  {% endif %}
+  {% if canceled %}
+  <div class="glass panel fade-in" style="margin-bottom:16px; padding:14px 18px; font-size:13px; color:var(--muted);">
+    구독이 해지되었습니다. 다음 결제 주기부터는 Free 플랜이 적용됩니다.
+  </div>
+  {% endif %}
+
   <div class="glass panel fade-in">
     <div style="font-size:13px; color:var(--muted); margin-bottom:4px;">이메일</div>
     <div style="font-size:15px; font-weight:600; margin-bottom:22px;">{{ user.email }}</div>
 
-    <div style="border-top:1px solid var(--line); padding-top:20px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+      <div style="font-size:14px; font-weight:600;">구독 플랜</div>
+      <span class="chip {{ 'buy' if plan.price > 0 else 'hold' }}">{{ plan.name }}</span>
+    </div>
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:14px;">
+      관심종목 {{ '무제한' if plan.stock_limit is none else (plan.stock_limit ~ '개') }} ·
+      {{ '{:,}'.format(plan.price) }}원 / 월
+      {% if subscription and subscription.current_period_end %}
+        · 다음 결제일 {{ subscription.current_period_end[:10] }}
+      {% endif %}
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom:8px;">
+      <a href="/pricing"><button type="button" style="background:transparent; border:1px solid var(--line-strong); color:var(--text);">요금제 변경</button></a>
+      {% if plan.price > 0 %}
+      <form method="post" action="/billing/cancel" onsubmit="return confirm('구독을 해지하시겠습니까?');">
+        <button type="submit" class="danger" style="background:transparent;">구독 해지</button>
+      </form>
+      {% endif %}
+    </div>
+
+    {% if payments %}
+    <div style="margin-top:18px; border-top:1px solid var(--line); padding-top:16px;">
+      <div style="font-size:13px; font-weight:600; margin-bottom:10px;">결제 이력</div>
+      <table>
+        <thead><tr><th>일시</th><th>플랜</th><th>금액</th><th>상태</th></tr></thead>
+        <tbody>
+          {% for p in payments %}
+          <tr>
+            <td class="mono">{{ p.created_at[:16] }}</td>
+            <td>{{ p.plan }}</td>
+            <td class="mono">{{ '{:,}'.format(p.amount) }}원</td>
+            <td>{{ '결제완료' if p.status == 'paid' else p.status }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="glass panel fade-in" style="margin-top:20px">
+    <div style="border-top:none; padding-top:0;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
         <div style="font-size:14px; font-weight:600;">카카오톡 '나에게 채팅' 연동</div>
         {% if user.kakao_access_token %}

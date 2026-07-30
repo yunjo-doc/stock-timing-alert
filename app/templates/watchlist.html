@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Watchlist — Stock Analysis</title>
+<title>Watchlist — AlphaTiming</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -11,12 +11,13 @@
 <div class="topbar">
   <div class="brand">
     <span class="dot"></span>
-    <h1>Stock Analysis</h1>
+    <h1>AlphaTiming</h1>
   </div>
   <nav>
     <a href="/">Dashboard</a>
     <a href="/watchlist" class="active">Watchlist</a>
     <a href="/notifications">Signals</a>
+    <a href="/pricing">요금제</a>
     {% if user %}
     <a href="/account">{{ user.email }}</a>
     {% else %}
@@ -28,12 +29,35 @@
 <div class="wrap">
   <div class="section-title" style="margin-top:0"><span class="n">·</span> 관심종목 관리</div>
 
+  <div class="meta-row">
+    <div class="meta-left">
+      <span>현재 플랜 <b>{{ plan.name }}</b></span>
+      <span>등록 <b>{{ watch_list|length }}</b> / {{ limit_label }}</span>
+    </div>
+    {% if at_limit %}
+    <a class="action-link" href="/pricing">요금제 업그레이드</a>
+    {% endif %}
+  </div>
+
+  {% if error %}
+  <div class="glass panel fade-in" style="border-color: var(--danger); margin-bottom:16px; padding:14px 18px; font-size:13px; color:var(--danger);">
+    {{ error }}
+  </div>
+  {% endif %}
+
   <div class="glass panel fade-in">
+    {% if at_limit %}
+    <div class="footer-note" style="margin-top:0; margin-bottom:18px; border-top:none; padding-top:0;">
+      현재 플랜의 관심종목 등록 한도({{ limit_label }})에 도달했습니다.
+      더 많은 종목의 신호를 받으시려면 <a href="/pricing" style="color:var(--secondary)">요금제를 업그레이드</a>해주세요.
+    </div>
+    {% else %}
     <form class="form-row" action="/watchlist/add" method="post">
       <input type="text" name="code" placeholder="종목코드 (예: 005930)" required>
       <input type="text" name="name" placeholder="종목명 (예: 삼성전자)" required>
       <button type="submit">추가</button>
     </form>
+    {% endif %}
 
     <table>
       <thead>

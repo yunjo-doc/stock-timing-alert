@@ -1,19 +1,30 @@
 # -*- coding: utf-8 -*-
 """분석 사이클: 관심종목 전체를 조회 -> 5개 요소 분석 -> DB 저장 -> 신호 변경시 알림"""
 
-from datetime import datetime
+import uuid
+from datetime import datetime, timedelta
 
 from .data_source import naver
 from .analysis.signal_engine import analyze_stock
 from .notify import kakao
 from . import db
+from .billing import toss as toss_client
+from .billing.plans import get_plan
+
+
+def _build_analysis_universe(cfg: dict):
+    """분석 대상 = 관리자 기본 종목(config.json) + 모든 회원의 관심종목 합집합 (코드 기준 중복 제거)"""
+    merged = {s["code"]: s for s in cfg["watch_list"]}
+    for s in db.get_all_watched_stocks():
+        merged.setdefault(s["code"], s)
+    return list(merged.values())
 
 
 def run_analysis_cycle(cfg: dict):
     print(f"\n===== 분석 사이클 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} =====")
     results = []
 
-    for stock in cfg["watch_list"]:
+    for stock in _build_analysis_universe(cfg):
         code, name = stock["code"], stock["name"]
         try:
             ohlc_rows = naver.get_daily_ohlcv(code, cfg["lookback_days"])
@@ -43,6 +54,39 @@ def run_analysis_cycle(cfg: dict):
 
     print("===== 분석 사이클 종료 =====\n")
     return results
+
+
+BILLING_PERIOD_DAYS = 30
+
+
+def run_billing_cycle():
+    """결제 주기가 끝난 구독을 저장된 빌링키로 자동 청구 (매일 실행)"""
+    due = db.get_subscriptions_due_for_renewal()
+    if not due:
+        return
+    print(f"[정기결제] 청구 대상 {len(due)}건")
+
+    for sub in due:
+        plan = get_plan(sub["plan"])
+        order_id = f"renew-{sub['user_id']}-{uuid.uuid4().hex[:12]}"
+        try:
+            charge = toss_client.charge_billing(
+                sub["billing_key"], sub["customer_key"], plan["price"], order_id,
+                f"AlphaTiming {plan['name']} 플랜 정기결제",
+            )
+        except toss_client.TossError as e:
+            print(f"[정기결제 실패] user_id={sub['user_id']} plan={sub['plan']}: {e}")
+            db.mark_subscription_past_due(sub["id"])
+            db.log_payment(sub["user_id"], sub["id"], order_id, sub["plan"], plan["price"],
+                            "failed", "card", str(e))
+            continue
+
+        now = datetime.now()
+        period_end = now + timedelta(days=BILLING_PERIOD_DAYS)
+        db.renew_subscription(sub["id"], now.isoformat(), period_end.isoformat())
+        db.log_payment(sub["user_id"], sub["id"], order_id, sub["plan"], plan["price"],
+                        "paid", charge.get("method", "card"), "")
+        print(f"[정기결제 완료] user_id={sub['user_id']} plan={sub['plan']}")
 
 
 def _build_message(result: dict) -> str:

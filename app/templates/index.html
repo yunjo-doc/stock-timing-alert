@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Stock Analysis — 투자 타이밍 알리미</title>
+<title>AlphaTiming — 투자 타이밍 알리미</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -11,13 +11,14 @@
 <div class="topbar">
   <div class="brand">
     <span class="dot"></span>
-    <h1>Stock Analysis</h1>
+    <h1>AlphaTiming</h1>
     <span class="sub">확률분포 · 시장온도 · 추세 · 펀더멘털 · 리스크</span>
   </div>
   <nav>
     <a href="/" class="active">Dashboard</a>
     <a href="/watchlist">Watchlist</a>
     <a href="/notifications">Signals</a>
+    <a href="/pricing">요금제</a>
     {% if user %}
     <a href="/account">{{ user.email }}</a>
     {% else %}
