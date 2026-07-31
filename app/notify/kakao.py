@@ -74,6 +74,24 @@ def _send_kakao_memo(access_token: str, text: str) -> bool:
     return resp.status_code == 200
 
 
+def _send_with_refresh(user: dict, message: str, rest_api_key: str, client_secret: str) -> bool:
+    """access_token으로 전송을 시도하고, 실패하면(만료 가능성) refresh_token으로 한 번
+    갱신 후 재시도한다. 성공 시 갱신된 토큰을 DB에 저장한다."""
+    sent = False
+    try:
+        sent = _send_kakao_memo(user["kakao_access_token"], message)
+        if not sent and rest_api_key and user.get("kakao_refresh_token"):
+            refreshed = refresh_kakao_token(rest_api_key, user["kakao_refresh_token"], client_secret)
+            new_access = refreshed.get("access_token")
+            new_refresh = refreshed.get("refresh_token", user["kakao_refresh_token"])
+            if new_access:
+                db.save_user_kakao_tokens(user["id"], new_access, new_refresh)
+                sent = _send_kakao_memo(new_access, message)
+    except Exception as e:
+        print(f"[카카오톡 전송 오류] user_id={user['id']}: {e}")
+    return sent
+
+
 def notify_all_connected_users(code: str, message: str, cfg: dict):
     """
     카카오 '나에게 보내기'를 연동한 모든 사용자에게 알림을 보낸다.
@@ -81,6 +99,7 @@ def notify_all_connected_users(code: str, message: str, cfg: dict):
     연동한 사용자가 한 명도 없으면 콘솔 로그로 대체한다.
     """
     rest_api_key = cfg.get("kakao", {}).get("rest_api_key")
+    client_secret = cfg.get("kakao", {}).get("client_secret", "")
     users = db.get_all_kakao_connected_users()
 
     if not users:
@@ -90,21 +109,18 @@ def notify_all_connected_users(code: str, message: str, cfg: dict):
 
     any_sent = False
     for user in users:
-        sent = False
-        try:
-            sent = _send_kakao_memo(user["kakao_access_token"], message)
-            if not sent and rest_api_key and user.get("kakao_refresh_token"):
-                # 토큰 만료 가능성 -> 갱신 후 1회 재시도
-                refreshed = refresh_kakao_token(rest_api_key, user["kakao_refresh_token"])
-                new_access = refreshed.get("access_token")
-                new_refresh = refreshed.get("refresh_token", user["kakao_refresh_token"])
-                if new_access:
-                    db.save_user_kakao_tokens(user["id"], new_access, new_refresh)
-                    sent = _send_kakao_memo(new_access, message)
-        except Exception as e:
-            print(f"[카카오톡 전송 오류] user_id={user['id']}: {e}")
-
+        sent = _send_with_refresh(user, message, rest_api_key, client_secret)
         db.log_notification(code, message, sent, user_id=user["id"])
         any_sent = any_sent or sent
 
     return any_sent
+
+
+def send_test_message(user: dict, cfg: dict) -> bool:
+    """연동 화면에서 '테스트 알림 보내기'로 호출 — 이 사용자 한 명에게만 발송한다."""
+    rest_api_key = cfg.get("kakao", {}).get("rest_api_key")
+    client_secret = cfg.get("kakao", {}).get("client_secret", "")
+    message = "[AlphaTiming 테스트] 카카오톡 알림 연동이 정상적으로 완료되었습니다."
+    sent = _send_with_refresh(user, message, rest_api_key, client_secret)
+    db.log_notification("TEST", message, sent, user_id=user["id"])
+    return sent

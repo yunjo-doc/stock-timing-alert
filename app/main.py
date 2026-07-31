@@ -333,7 +333,8 @@ def kakao_login_callback(request: Request, code: str = ""):
 # 내 계정 (구독 현황 + 카카오 '나에게 채팅' 연동 관리)
 # ----------------------------------------------------------------------
 @app.get("/account", response_class=HTMLResponse)
-def account_page(request: Request, subscribed: int = 0, canceled: int = 0, downgrade_scheduled: int = 0):
+def account_page(request: Request, subscribed: int = 0, canceled: int = 0, downgrade_scheduled: int = 0,
+                  test_sent: int = 0, test_failed: int = 0):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/account", status_code=303)
@@ -346,6 +347,7 @@ def account_page(request: Request, subscribed: int = 0, canceled: int = 0, downg
         "user": user, "plan": plan, "subscription": subscription, "payments": payments,
         "pending_plan": pending_plan,
         "subscribed": subscribed, "canceled": canceled, "downgrade_scheduled": downgrade_scheduled,
+        "test_sent": test_sent, "test_failed": test_failed,
     })
 
 
@@ -552,6 +554,21 @@ def kakao_disconnect(request: Request):
         return RedirectResponse(url="/login?next=/account", status_code=303)
     db.disconnect_user_kakao(user["id"])
     return RedirectResponse(url="/account?disconnected=1", status_code=303)
+
+
+@app.post("/kakao/test-notify")
+def kakao_test_notify(request: Request):
+    """연동 화면의 '테스트 알림 보내기' 버튼 — 본인 카카오톡으로만 테스트 메시지 1건 발송."""
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/account", status_code=303)
+    full_user = db.get_user_by_id(user["id"])
+    if not full_user or not full_user.get("kakao_access_token"):
+        return RedirectResponse(url="/account?test_failed=1", status_code=303)
+
+    cfg = load_config()
+    sent = kakao_mod.send_test_message(full_user, cfg)
+    return RedirectResponse(url=f"/account?{'test_sent=1' if sent else 'test_failed=1'}", status_code=303)
 
 
 # ----------------------------------------------------------------------

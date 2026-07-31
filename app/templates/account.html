@@ -42,6 +42,16 @@
     플랜 변경이 예약되었습니다. 다음 결제일까지는 현재 플랜을 그대로 이용하실 수 있습니다.
   </div>
   {% endif %}
+  {% if test_sent %}
+  <div class="glass panel fade-in" style="border-color:var(--accent); margin-bottom:16px; padding:14px 18px; font-size:13px; color:var(--accent);">
+    테스트 알림을 보냈습니다. 카카오톡 '나와의 채팅'을 확인해보세요.
+  </div>
+  {% endif %}
+  {% if test_failed %}
+  <div class="glass panel fade-in" style="border-color:var(--danger); margin-bottom:16px; padding:14px 18px; font-size:13px; color:var(--danger);">
+    테스트 알림 전송에 실패했습니다. 카카오 연동 상태를 확인해주세요.
+  </div>
+  {% endif %}
 
   <div class="glass panel fade-in">
     <div style="font-size:13px; color:var(--muted); margin-bottom:4px;">이메일</div>
@@ -109,9 +119,14 @@
           매수/매도 신호가 뜨면 카카오톡 '나와의 채팅'으로 알림을 보내드립니다.
           {% if user.kakao_connected_at %}(연동일: {{ user.kakao_connected_at[:19] }}){% endif %}
         </div>
-        <form method="post" action="/kakao/disconnect">
-          <button type="submit" class="danger" style="background:transparent;">연동 해제</button>
-        </form>
+        <div style="display:flex; gap:10px;">
+          <form method="post" action="/kakao/test-notify">
+            <button type="submit" style="background:transparent; border:1px solid var(--line-strong); color:var(--text);">테스트 알림 보내기</button>
+          </form>
+          <form method="post" action="/kakao/disconnect">
+            <button type="submit" class="danger" style="background:transparent;">연동 해제</button>
+          </form>
+        </div>
       {% else %}
         <div style="font-size:12.5px; color:var(--muted); margin-bottom:16px;">
           아직 연동되어 있지 않습니다. 아래 버튼을 누르면 카카오 로그인 화면으로 이동하고,
