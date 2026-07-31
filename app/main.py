@@ -51,6 +51,7 @@ from .billing import plans as billing_plans
 from .billing import toss as toss_client
 
 BILLING_PERIOD_DAYS = 30
+RUN_NOW_COOLDOWN_SECONDS = 60
 
 app = FastAPI(title="AlphaTiming")
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "dev-insecure-secret-change-me"))
@@ -86,6 +87,13 @@ def _check_admin(token: str, cfg: dict):
 
 def _is_admin_session(request: Request) -> bool:
     return bool(request.session.get("is_admin"))
+
+
+def _next_analysis_run_iso():
+    job = _scheduler.get_job("analysis_cycle")
+    if job and job.next_run_time:
+        return job.next_run_time.astimezone().replace(tzinfo=None).isoformat()
+    return None
 
 
 # ----------------------------------------------------------------------
@@ -127,6 +135,7 @@ def dashboard(request: Request):
         "watch_count": watch_count,
         "interval": cfg["schedule"]["interval_minutes"],
         "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "next_run": _next_analysis_run_iso(),
         "user": user,
         "plan": billing_plans.get_plan(db.get_user_plan_key(user["id"])),
     })
@@ -385,20 +394,28 @@ def billing_cancel(request: Request):
 
 
 # ----------------------------------------------------------------------
-# 수동 실행 (관리자 전용)
+# 수동 실행 (로그인한 회원 누구나 가능, 남용 방지를 위해 쿨다운 적용)
 # ----------------------------------------------------------------------
 @app.post("/run-now")
 def run_now(request: Request, background_tasks: BackgroundTasks, x_admin_token: str = Header(default="")):
     cfg = load_config()
-    if not _is_admin_session(request):
+    if not auth.current_user(request) and not _is_admin_session(request):
         _check_admin(x_admin_token, cfg)
+
+    last_run = db.get_last_analysis_time()
+    if last_run:
+        elapsed = (datetime.now() - datetime.fromisoformat(last_run)).total_seconds()
+        if elapsed < RUN_NOW_COOLDOWN_SECONDS:
+            wait = int(RUN_NOW_COOLDOWN_SECONDS - elapsed)
+            raise HTTPException(status_code=429, detail=f"{wait}초 후 다시 시도해주세요.")
+
     background_tasks.add_task(run_analysis_cycle, cfg)
     return JSONResponse({"started": True, "requested_at": datetime.now().isoformat()})
 
 
 @app.get("/api/last-run")
 def api_last_run():
-    return {"last_run": db.get_last_analysis_time()}
+    return {"last_run": db.get_last_analysis_time(), "next_run": _next_analysis_run_iso()}
 
 
 # ----------------------------------------------------------------------

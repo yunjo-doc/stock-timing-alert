@@ -70,6 +70,7 @@
     </button>
   </div>
   <div id="refreshStatus" class="refresh-status"></div>
+  <div id="nextRunCountdown" class="refresh-status" data-next-run="{{ next_run or '' }}"></div>
 
   {% if not signals %}
   <div class="empty" style="margin-top:24px">
@@ -264,31 +265,19 @@ async function runNow() {
   status.textContent = '분석 요청 중...';
 
   try {
-    // /admin/login 으로 관리자 세션이 이미 있으면 토큰 없이 바로 동작합니다.
-    let resp = await fetch('/run-now', { method: 'POST' });
+    const resp = await fetch('/run-now', { method: 'POST' });
 
     if (resp.status === 401) {
-      let token = localStorage.getItem('admin_token');
-      if (token) resp = await fetch('/run-now', { method: 'POST', headers: { 'x-admin-token': token } });
-
-      if (!token || resp.status === 401) {
-        localStorage.removeItem('admin_token');
-        token = prompt('관리자 전용 기능입니다. 관리자 토큰을 입력하세요.\n(취소해도 괜찮습니다 — 관심종목은 자동분석 주기마다 갱신됩니다)');
-        if (!token) {
-          status.textContent = '취소했습니다. 이 버튼은 관리자 전용이며, 관심종목은 자동분석 주기마다 자동으로 갱신됩니다.';
-          btn.disabled = false; btn.classList.remove('loading');
-          return;
-        }
-        resp = await fetch('/run-now', { method: 'POST', headers: { 'x-admin-token': token } });
-        if (resp.status === 401) {
-          status.textContent = '토큰이 올바르지 않습니다. 버튼을 다시 눌러 재입력해주세요.';
-          btn.disabled = false; btn.classList.remove('loading');
-          return;
-        }
-        localStorage.setItem('admin_token', token);
-      }
+      status.textContent = '로그인이 필요합니다.';
+      btn.disabled = false; btn.classList.remove('loading');
+      return;
     }
-
+    if (resp.status === 429) {
+      const data = await resp.json().catch(() => ({}));
+      status.textContent = data.detail || '너무 자주 요청했습니다. 잠시 후 다시 시도해주세요.';
+      btn.disabled = false; btn.classList.remove('loading');
+      return;
+    }
     if (!resp.ok) throw new Error('요청 실패 (' + resp.status + ')');
 
     const data = await resp.json();
@@ -325,6 +314,28 @@ function pollForCompletion(requestedAt, btn, status) {
     }
   }, 3000);
 }
+
+// 다음 자동분석까지 남은 시간 카운트다운
+(function initCountdown() {
+  const el = document.getElementById('nextRunCountdown');
+  const iso = el.dataset.nextRun;
+  if (!iso) return;
+  const target = new Date(iso);
+
+  function tick() {
+    const remainMs = target - new Date();
+    if (remainMs <= 0) {
+      el.textContent = '곧 자동으로 분석 자료를 발행합니다';
+      return;
+    }
+    const totalSec = Math.floor(remainMs / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    el.textContent = `${m}분 ${String(s).padStart(2, '0')}초 후 자동으로 분석 자료를 발행합니다`;
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
 </script>
 
 </body>
