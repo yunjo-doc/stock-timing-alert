@@ -30,23 +30,29 @@ def get_user_profile(access_token: str) -> dict:
     return resp.json()
 
 
-def exchange_code_for_token(rest_api_key: str, code: str, redirect_uri: str) -> dict:
-    resp = requests.post(KAKAO_TOKEN_URL, data={
+def exchange_code_for_token(rest_api_key: str, code: str, redirect_uri: str, client_secret: str = "") -> dict:
+    payload = {
         "grant_type": "authorization_code",
         "client_id": rest_api_key,
         "redirect_uri": redirect_uri,
         "code": code,
-    })
+    }
+    if client_secret:
+        payload["client_secret"] = client_secret
+    resp = requests.post(KAKAO_TOKEN_URL, data=payload)
     resp.raise_for_status()
     return resp.json()
 
 
-def refresh_kakao_token(rest_api_key: str, refresh_token: str) -> dict:
-    resp = requests.post(KAKAO_TOKEN_URL, data={
+def refresh_kakao_token(rest_api_key: str, refresh_token: str, client_secret: str = "") -> dict:
+    payload = {
         "grant_type": "refresh_token",
         "client_id": rest_api_key,
         "refresh_token": refresh_token,
-    })
+    }
+    if client_secret:
+        payload["client_secret"] = client_secret
+    resp = requests.post(KAKAO_TOKEN_URL, data=payload)
     resp.raise_for_status()
     return resp.json()
 

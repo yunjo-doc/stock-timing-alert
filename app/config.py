@@ -32,6 +32,9 @@ def load_config() -> dict:
     # 사용자별 access_token/refresh_token은 이제 DB(users 테이블)에 저장됩니다 (app/auth.py, /account 참고).
     cfg.setdefault("kakao", {})
     cfg["kakao"]["rest_api_key"] = os.getenv("KAKAO_REST_API_KEY", cfg["kakao"].get("rest_api_key", ""))
+    # 카카오 개발자센터에서 "클라이언트 시크릿"을 활성화(ON)한 경우, 토큰 발급 요청에
+    # client_secret을 함께 보내지 않으면 401(invalid_client) 오류가 발생합니다.
+    cfg["kakao"]["client_secret"] = os.getenv("KAKAO_CLIENT_SECRET", cfg["kakao"].get("client_secret", ""))
 
     cfg["admin_token"] = os.getenv("ADMIN_TOKEN", "change-me")
 

@@ -316,7 +316,7 @@ def kakao_login_callback(request: Request, code: str = ""):
     redirect_uri = str(request.base_url).rstrip("/") + "/auth/kakao/callback"
 
     try:
-        token_data = kakao_mod.exchange_code_for_token(rest_api_key, code, redirect_uri)
+        token_data = kakao_mod.exchange_code_for_token(rest_api_key, code, redirect_uri, cfg["kakao"].get("client_secret", ""))
         profile = kakao_mod.get_user_profile(token_data["access_token"])
     except Exception as e:
         return RedirectResponse(url=f"/login?error={quote('카카오 로그인에 실패했습니다: ' + str(e))}", status_code=303)
@@ -537,7 +537,7 @@ def kakao_callback(request: Request, code: str = ""):
     rest_api_key = cfg["kakao"].get("rest_api_key")
     redirect_uri = str(request.base_url) + "kakao/callback"
     try:
-        token_data = kakao_mod.exchange_code_for_token(rest_api_key, code, redirect_uri)
+        token_data = kakao_mod.exchange_code_for_token(rest_api_key, code, redirect_uri, cfg["kakao"].get("client_secret", ""))
     except Exception as e:
         return HTMLResponse(f"카카오 연동에 실패했습니다: {e}", status_code=400)
 
