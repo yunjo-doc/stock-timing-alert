@@ -62,9 +62,8 @@ body {
   backdrop-filter: blur(16px);
 }
 .topbar .brand { display: flex; align-items: center; gap: 10px; }
-.topbar .brand .dot {
-  width: 9px; height: 9px; border-radius: 50%;
-  background: var(--accent); box-shadow: 0 0 10px var(--accent);
+.topbar .brand .brand-logo {
+  width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0; object-fit: cover;
 }
 .topbar h1 { font-size: 16.5px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
 .topbar .sub { color: var(--muted); font-size: 12px; font-family: var(--font-mono); }
