@@ -46,7 +46,11 @@ def fundamental_score(fundamental_data: dict, cfg) -> dict:
     if roe >= f["roe_good_above"]:
         score += 0.3
         notes.append(f"ROE {roe}% — 수익성 양호")
-    elif roe <= 0:
+    elif roe == 0:
+        # PER/PBR과 동일하게, 정확히 0은 '데이터 없음'(가상자산 등 재무지표가 없는
+        # 경우 포함)으로 간주해 중립 처리합니다. 진짜 적자(음수)만 감점합니다.
+        notes.append("ROE 데이터 없음 — 중립 처리")
+    elif roe < 0:
         score -= 0.3
         notes.append(f"ROE {roe}% — 수익성 부진/적자")
     else:

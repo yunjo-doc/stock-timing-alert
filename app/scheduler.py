@@ -4,42 +4,46 @@
 import uuid
 from datetime import datetime, timedelta
 
-from .data_source import naver
+from .data_source import naver, upbit
 from .analysis.signal_engine import analyze_stock
 from .notify import kakao
 from . import db
 from .billing import toss as toss_client
 from .billing.plans import get_plan
 
+# market별 데이터소스: 증권(stock)은 네이버 금융, 가상자산(crypto)은 업비트
+DATA_SOURCES = {"stock": naver, "crypto": upbit}
 
-def _build_analysis_universe(cfg: dict):
-    """분석 대상 = 관리자 기본 종목(config.json) + 모든 회원의 관심종목 합집합 (코드 기준 중복 제거)"""
-    merged = {s["code"]: s for s in cfg["watch_list"]}
-    for s in db.get_all_watched_stocks():
+
+def _build_analysis_universe(cfg: dict, market: str):
+    """분석 대상 = (증권일 때만) 관리자 기본 종목(config.json) + 모든 회원의 해당 market
+    관심종목 합집합 (코드 기준 중복 제거)"""
+    merged = {s["code"]: s for s in cfg["watch_list"]} if market == "stock" else {}
+    for s in db.get_all_watched_stocks(market=market):
         merged.setdefault(s["code"], s)
     return list(merged.values())
 
 
-def run_analysis_cycle(cfg: dict):
-    print(f"\n===== 분석 사이클 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} =====")
+def _analyze_market(cfg: dict, market: str):
+    data_source = DATA_SOURCES[market]
     results = []
 
-    for stock in _build_analysis_universe(cfg):
+    for stock in _build_analysis_universe(cfg, market):
         code, name = stock["code"], stock["name"]
         try:
-            ohlc_rows = naver.get_daily_ohlcv(code, cfg["lookback_days"])
-            fundamental_data = naver.get_fundamental(code)
+            ohlc_rows = data_source.get_daily_ohlcv(code, cfg["lookback_days"])
+            fundamental_data = data_source.get_fundamental(code)
         except Exception as e:
             print(f"[에러] {name}({code}) 데이터 조회 실패: {e}")
             continue
 
         if not ohlc_rows:
-            print(f"[경고] {name}({code}) 시세 데이터를 가져오지 못했습니다 (네이버 크롤링 실패 가능성).")
+            print(f"[경고] {name}({code}) 시세 데이터를 가져오지 못했습니다.")
             continue
 
         result = analyze_stock(code, name, ohlc_rows, fundamental_data, cfg)
         db.save_signal_result(result)
-        print(f"[{name}({code})] 신호: {result['signal']} (점수 {result.get('final_score')})")
+        print(f"[{market}][{name}({code})] 신호: {result['signal']} (점수 {result.get('final_score')})")
 
         prev = db.get_last_signal(code)
         prev_signal = prev["signal"] if prev else None
@@ -52,6 +56,12 @@ def run_analysis_cycle(cfg: dict):
         db.upsert_last_signal(code, curr_signal, result.get("final_score", 0))
         results.append(result)
 
+    return results
+
+
+def run_analysis_cycle(cfg: dict):
+    print(f"\n===== 분석 사이클 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} =====")
+    results = _analyze_market(cfg, "stock") + _analyze_market(cfg, "crypto")
     db.trim_signal_history(keep_per_code=20)  # DB 용량 최소화: 종목당 최근 20건만 유지
     print("===== 분석 사이클 종료 =====\n")
     return results

@@ -46,6 +46,16 @@
   border: 1px solid var(--line-strong); font-size: 12.5px; padding: 9px 0;
 }
 .feed-toggle:hover { background: var(--overlay-strong); }
+
+.market-tabs { display: flex; gap: 10px; margin-bottom: 4px; }
+.market-tab {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 9px 22px; border-radius: 999px; font-size: 14px; font-weight: 700;
+  text-decoration: none; border: 2px solid var(--line-strong); color: var(--muted);
+  background: var(--card-solid); transition: all 0.15s ease;
+}
+.market-tab:hover { border-color: var(--secondary); color: var(--secondary); }
+.market-tab.active { border-color: var(--secondary); color: var(--secondary); background: var(--secondary-dim); }
 </style>
 </head>
 <body>
@@ -59,7 +69,7 @@
   <button class="nav-toggle" onclick="this.nextElementSibling.classList.toggle('open')">☰</button>
   <nav>
     <a href="/" class="active">Dashboard</a>
-    <a href="/watchlist">Watchlist</a>
+    <a href="/watchlist?market={{ market }}">Watchlist</a>
     <a href="/notifications">Signals</a>
     <a href="/pricing">요금제</a>
     {% if user %}
@@ -73,16 +83,23 @@
 <div class="wrap">
   <div class="hero-band fade-in">
     <h2>AI 기반 투자 타이밍 분석</h2>
-    <p>데이터 기반 AI가 확률분포·시장온도·추세·펀더멘털·리스크를 종합해 최적의 투자 시점을 분석합니다.</p>
+    <div class="market-tabs">
+      <a href="/?market=stock" class="market-tab {{ 'active' if market == 'stock' else '' }}">증권</a>
+      <a href="/?market=crypto" class="market-tab {{ 'active' if market == 'crypto' else '' }}">가상자산</a>
+    </div>
+    <p>
+      데이터 기반 AI가 확률분포·시장온도·추세·펀더멘털·리스크를 종합해
+      {{ '코인 시장의' if market == 'crypto' else '' }} 최적의 투자 시점을 분석합니다.
+    </p>
     <div class="hero-cta">
-      <a href="{{ '/watchlist' if user else '/signup' }}"><button type="button">무료 분석 시작</button></a>
+      <a href="{{ ('/watchlist?market=' ~ market) if user else '/signup' }}"><button type="button">무료 분석 시작</button></a>
       <a href="/pricing"><button type="button" class="ghost">프리미엄 보기</button></a>
     </div>
   </div>
 
   <div class="meta-row">
     <div class="meta-left">
-      <span>관심종목 <b>{{ watch_count }}</b>개</span>
+      <span>{{ '관심코인' if market == 'crypto' else '관심종목' }} <b>{{ watch_count }}</b>개</span>
       <span>자동분석 주기 <b>{{ interval }}</b>분</span>
       <span>마지막 갱신 <b>{{ now }}</b></span>
     </div>
@@ -98,8 +115,10 @@
     <div style="font-size:28px; margin-bottom:10px;">📊</div>
     아직 분석 결과가 없습니다.<br>
     {% if user %}
-    관심종목을 추가하고 "지금 갱신"으로 첫 분석을 실행해보세요.
-    <div style="margin-top:16px"><a href="/watchlist"><button type="button">관심종목 추가하기</button></a></div>
+    {{ '관심코인을' if market == 'crypto' else '관심종목을' }} 추가하고 "지금 갱신"으로 첫 분석을 실행해보세요.
+    <div style="margin-top:16px">
+      <a href="/watchlist?market={{ market }}"><button type="button">{{ '관심코인 추가하기' if market == 'crypto' else '관심종목 추가하기' }}</button></a>
+    </div>
     {% else %}
     회원가입하고 관심종목을 등록하면 AI 분석 결과를 볼 수 있습니다.
     <div style="margin-top:16px"><a href="/signup"><button type="button">무료로 시작하기</button></a></div>
@@ -295,7 +314,7 @@
           </td>
           <td class="mono">{{ s.market_temperature if s.market_temperature is not none else '—' }}</td>
           <td class="mono">{{ s.risk_score if s.risk_score is not none else '—' }}</td>
-          <td><a class="action-link" href="/watchlist">관리</a></td>
+          <td><a class="action-link" href="/watchlist?market={{ market }}">관리</a></td>
         </tr>
         {% endfor %}
       </tbody>

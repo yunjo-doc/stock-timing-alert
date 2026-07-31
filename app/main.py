@@ -31,9 +31,18 @@ FastAPI 메인 앱
 """
 
 import os
+import sys
 import uuid
 from datetime import datetime, timedelta
 from urllib.parse import quote
+
+# 콘솔 인코딩이 UTF-8이 아닌 환경(예: Windows cp949)에서 로그에 포함된 특수문자(—, ± 등)
+# 때문에 UnicodeEncodeError로 분석 사이클이 중단되는 것을 방지합니다.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 from fastapi import FastAPI, Request, Form, Header, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
@@ -49,8 +58,12 @@ from . import dashboard_utils as du
 from . import auth
 from .notify import kakao as kakao_mod
 from .data_source import naver as naver_mod
+from .data_source import upbit as upbit_mod
 from .billing import plans as billing_plans
 from .billing import toss as toss_client
+
+# 검색 데이터소스: 증권(stock)은 네이버 금융, 가상자산(crypto)은 업비트
+SEARCH_SOURCES = {"stock": naver_mod, "crypto": upbit_mod}
 
 BILLING_PERIOD_DAYS = 30
 RUN_NOW_COOLDOWN_SECONDS = 60
@@ -102,14 +115,15 @@ def _next_analysis_run_iso():
 # 대시보드
 # ----------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request):
+def dashboard(request: Request, market: str = "stock"):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/", status_code=303)
+    market = market if market in ("stock", "crypto") else "stock"
 
     cfg = load_config()
     all_signals = db.get_latest_signals_for_dashboard()
-    my_codes = {w["code"] for w in db.get_user_watchlist(user["id"])}
+    my_codes = {w["code"] for w in db.get_user_watchlist(user["id"], market=market)}
     signals = [s for s in all_signals if s["code"] in my_codes]
     watch_count = len(my_codes)
 
@@ -141,6 +155,7 @@ def dashboard(request: Request):
         "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "next_run": _next_analysis_run_iso(),
         "user": user,
+        "market": market,
         "plan": billing_plans.get_plan(db.get_user_plan_key(user["id"])),
     })
 
@@ -155,24 +170,27 @@ def notifications_page(request: Request):
 # 관심종목 관리
 # ----------------------------------------------------------------------
 @app.get("/api/stocks/search")
-def api_stocks_search(request: Request, q: str = ""):
+def api_stocks_search(request: Request, q: str = "", market: str = "stock"):
     if not auth.current_user(request):
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-    return naver_mod.search_stocks(q, limit=15)
+    source = SEARCH_SOURCES.get(market, naver_mod)
+    return source.search_stocks(q, limit=15)
 
 
 @app.get("/watchlist", response_class=HTMLResponse)
-def watchlist_page(request: Request, error: str = ""):
+def watchlist_page(request: Request, error: str = "", market: str = "stock"):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/watchlist", status_code=303)
+    market = market if market in ("stock", "crypto") else "stock"
 
     plan = billing_plans.get_plan(db.get_user_plan_key(user["id"]))
-    watch_list = db.get_user_watchlist(user["id"])
+    watch_list = db.get_user_watchlist(user["id"], market=market)
     return templates.TemplateResponse(request, "watchlist.html", {
         "watch_list": watch_list,
         "user": user,
         "plan": plan,
+        "market": market,
         "limit_label": billing_plans.stock_limit_label(plan),
         "at_limit": plan["stock_limit"] is not None and len(watch_list) >= plan["stock_limit"],
         "error": error,
@@ -180,30 +198,34 @@ def watchlist_page(request: Request, error: str = ""):
 
 
 @app.post("/watchlist/add")
-def watchlist_add(request: Request, code: str = Form(...), name: str = Form(...)):
+def watchlist_add(request: Request, code: str = Form(...), name: str = Form(...), market: str = Form("stock")):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/watchlist", status_code=303)
+    market = market if market in ("stock", "crypto") else "stock"
 
     plan = billing_plans.get_plan(db.get_user_plan_key(user["id"]))
-    current_count = db.count_user_watchlist(user["id"])
+    current_count = db.count_user_watchlist(user["id"], market=market)
     if plan["stock_limit"] is not None and current_count >= plan["stock_limit"]:
-        msg = f"{plan['name']} 플랜은 관심종목을 최대 {plan['stock_limit']}개까지 등록할 수 있습니다. 요금제를 업그레이드해주세요."
-        return RedirectResponse(url=f"/watchlist?error={quote(msg)}", status_code=303)
+        label = "가상자산" if market == "crypto" else "증권"
+        msg = f"{plan['name']} 플랜은 {label} 관심종목을 최대 {plan['stock_limit']}개까지 등록할 수 있습니다. 요금제를 업그레이드해주세요."
+        return RedirectResponse(url=f"/watchlist?market={market}&error={quote(msg)}", status_code=303)
 
-    added = db.add_user_watchlist(user["id"], code, name)
+    added = db.add_user_watchlist(user["id"], code, name, market=market)
     if not added:
-        return RedirectResponse(url=f"/watchlist?error={quote('이미 등록된 종목입니다')}", status_code=303)
-    return RedirectResponse(url="/watchlist", status_code=303)
+        return RedirectResponse(
+            url=f"/watchlist?market={market}&error={quote('이미 등록된 종목입니다')}", status_code=303)
+    return RedirectResponse(url=f"/watchlist?market={market}", status_code=303)
 
 
 @app.post("/watchlist/remove")
-def watchlist_remove(request: Request, code: str = Form(...)):
+def watchlist_remove(request: Request, code: str = Form(...), market: str = Form("stock")):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/watchlist", status_code=303)
-    db.remove_user_watchlist(user["id"], code)
-    return RedirectResponse(url="/watchlist", status_code=303)
+    market = market if market in ("stock", "crypto") else "stock"
+    db.remove_user_watchlist(user["id"], code, market=market)
+    return RedirectResponse(url=f"/watchlist?market={market}", status_code=303)
 
 
 # ----------------------------------------------------------------------

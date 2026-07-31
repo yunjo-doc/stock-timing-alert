@@ -90,6 +90,7 @@ def init_db():
                 user_id INTEGER NOT NULL,
                 code TEXT NOT NULL,
                 name TEXT NOT NULL,
+                market TEXT NOT NULL DEFAULT 'stock',
                 added_at TEXT NOT NULL,
                 UNIQUE(user_id, code)
             )
@@ -131,6 +132,7 @@ def init_db():
         _ensure_column(conn, "users", "phone", "TEXT")
         _ensure_column(conn, "users", "is_active", "INTEGER DEFAULT 1")
         _ensure_column(conn, "users", "is_admin", "INTEGER DEFAULT 0")
+        _ensure_column(conn, "user_watchlist", "market", "TEXT NOT NULL DEFAULT 'stock'")
         conn.commit()
 
 
@@ -380,30 +382,36 @@ def get_recent_notifications(limit=30):
 
 
 # ----------------------------------------------------------------------
-# 사용자별 관심종목 (플랜별 개수 제한은 app/main.py, app/billing/plans.py 참고)
+# 사용자별 관심종목 (증권 stock / 가상자산 crypto, 플랜별 개수 제한은 market별 독립 적용)
 # ----------------------------------------------------------------------
-def get_user_watchlist(user_id: int):
+def get_user_watchlist(user_id: int, market: str = None):
     with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM user_watchlist WHERE user_id=? ORDER BY added_at", (user_id,)
-        ).fetchall()
+        if market:
+            rows = conn.execute(
+                "SELECT * FROM user_watchlist WHERE user_id=? AND market=? ORDER BY added_at",
+                (user_id, market),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM user_watchlist WHERE user_id=? ORDER BY added_at", (user_id,)
+            ).fetchall()
         return [dict(r) for r in rows]
 
 
-def count_user_watchlist(user_id: int) -> int:
+def count_user_watchlist(user_id: int, market: str = "stock") -> int:
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT COUNT(*) as c FROM user_watchlist WHERE user_id=?", (user_id,)
+            "SELECT COUNT(*) as c FROM user_watchlist WHERE user_id=? AND market=?", (user_id, market)
         ).fetchone()
         return row["c"] if row else 0
 
 
-def add_user_watchlist(user_id: int, code: str, name: str) -> bool:
+def add_user_watchlist(user_id: int, code: str, name: str, market: str = "stock") -> bool:
     with get_conn() as conn:
         try:
             conn.execute(
-                "INSERT INTO user_watchlist (user_id, code, name, added_at) VALUES (?, ?, ?, ?)",
-                (user_id, code.strip(), name.strip(), datetime.now().isoformat()),
+                "INSERT INTO user_watchlist (user_id, code, name, market, added_at) VALUES (?, ?, ?, ?, ?)",
+                (user_id, code.strip(), name.strip(), market, datetime.now().isoformat()),
             )
             conn.commit()
             return True
@@ -411,19 +419,19 @@ def add_user_watchlist(user_id: int, code: str, name: str) -> bool:
             return False  # 이미 추가된 종목
 
 
-def remove_user_watchlist(user_id: int, code: str):
+def remove_user_watchlist(user_id: int, code: str, market: str = "stock"):
     with get_conn() as conn:
         conn.execute(
-            "DELETE FROM user_watchlist WHERE user_id=? AND code=?", (user_id, code)
+            "DELETE FROM user_watchlist WHERE user_id=? AND code=? AND market=?", (user_id, code, market)
         )
         conn.commit()
 
 
-def get_all_watched_stocks():
-    """모든 사용자의 관심종목을 코드 기준으로 중복 제거해 반환 (분석 스케줄러용)"""
+def get_all_watched_stocks(market: str = "stock"):
+    """모든 사용자의 관심종목을 시장(market)별로 코드 기준 중복 제거해 반환 (분석 스케줄러용)"""
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT code, name FROM user_watchlist GROUP BY code ORDER BY code"
+            "SELECT code, name FROM user_watchlist WHERE market=? GROUP BY code ORDER BY code", (market,)
         ).fetchall()
         return [dict(r) for r in rows]
 
