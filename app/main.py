@@ -123,6 +123,7 @@ def dashboard(request: Request):
         mb_percentile = max(0, min(100, 50 + (ratio - 1) * 40))
     mb = du.maxwell_boltzmann_path(mb_percentile)
     recent_alerts = db.get_recent_notifications(6)
+    analysis_feed = db.get_recent_signals_for_codes(list(my_codes), limit=30)
 
     return templates.TemplateResponse(request, "index.html", {
         "signals": signals,
@@ -132,6 +133,7 @@ def dashboard(request: Request):
         "bell": bell,
         "mb": mb,
         "recent_alerts": recent_alerts,
+        "analysis_feed": analysis_feed,
         "watch_count": watch_count,
         "interval": cfg["schedule"]["interval_minutes"],
         "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

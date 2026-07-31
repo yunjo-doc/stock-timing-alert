@@ -25,6 +25,21 @@
 .rec-badge.sell { background: var(--danger-dim); color: var(--danger); }
 .rec-badge.hold { background: var(--warning-dim); color: var(--warning); }
 .rec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+
+.feed-list { display: flex; flex-direction: column; gap: 10px; max-height: 520px; overflow-y: auto; padding-right: 2px; }
+.feed-item {
+  padding: 13px 18px; border-left: 3px solid var(--line-strong);
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px;
+}
+.feed-item.buy { border-left-color: var(--accent); }
+.feed-item.sell { border-left-color: var(--danger); }
+.feed-item.hold { border-left-color: var(--warning); }
+.feed-item .feed-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.feed-item .feed-name { font-size: 13px; font-weight: 600; }
+.feed-item .feed-meta { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.feed-item .feed-time { font-family: var(--font-mono); font-size: 11px; color: var(--muted-2); white-space: nowrap; }
+.feed-item.new { animation: feedPulse 1.4s ease; }
+@keyframes feedPulse { from { background: var(--accent-dim); } to { background: transparent; } }
 </style>
 </head>
 <body>
@@ -85,6 +100,23 @@
     {% endif %}
   </div>
   {% else %}
+
+  <!-- 분석 피드: 분석할 때마다 새 결과가 맨 위에 쌓이고, 이전 결과는 아래로 남습니다 -->
+  <div class="section-title" style="margin-top:0"><span class="n">·</span> 분석 피드</div>
+  <div class="glass panel fade-in">
+    <div class="feed-list">
+      {% for f in analysis_feed %}
+      <div class="feed-item {{ f.signal|lower }} {{ 'new' if loop.first else '' }}">
+        <div class="feed-left">
+          <span class="chip {{ f.signal|lower }}">{{ f.signal }}</span>
+          <span class="feed-name">{{ f.name }} ({{ f.code }})</span>
+          <span class="feed-meta">{{ '{:,.0f}'.format(f.current_price or 0) }}원 · 종합점수 {{ f.final_score }}</span>
+        </div>
+        <span class="feed-time">{{ f.created_at[:16] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
 
   <!-- Section 1: Market Summary Cards -->
   <div class="section-title"><span class="n">01</span> Market Summary</div>

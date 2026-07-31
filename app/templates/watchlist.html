@@ -60,6 +60,15 @@
     </form>
     {% endif %}
 
+    {% if watch_list %}
+    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+      <button type="button" id="analyzeBtn" class="refresh-btn" onclick="analyzeNow()">
+        <span class="ic">⟳</span> 분석하기
+      </button>
+    </div>
+    <div id="analyzeStatus" class="refresh-status"></div>
+    {% endif %}
+
     <table>
       <thead>
         <tr><th>종목코드</th><th>종목명</th><th></th></tr>
@@ -86,6 +95,65 @@
     추가/삭제는 즉시 반영되며, 다음 자동분석 사이클부터 적용됩니다.
   </div>
 </div>
+
+<script>
+async function analyzeNow() {
+  const btn = document.getElementById('analyzeBtn');
+  const status = document.getElementById('analyzeStatus');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  status.textContent = '분석 요청 중...';
+
+  try {
+    const resp = await fetch('/run-now', { method: 'POST' });
+
+    if (resp.status === 401) {
+      status.textContent = '로그인이 필요합니다.';
+      btn.disabled = false; btn.classList.remove('loading');
+      return;
+    }
+    if (resp.status === 429) {
+      const data = await resp.json().catch(() => ({}));
+      status.textContent = data.detail || '너무 자주 요청했습니다. 잠시 후 다시 시도해주세요.';
+      btn.disabled = false; btn.classList.remove('loading');
+      return;
+    }
+    if (!resp.ok) throw new Error('요청 실패 (' + resp.status + ')');
+
+    const data = await resp.json();
+    status.textContent = '분석 진행 중... 완료되면 대시보드로 이동합니다 (최대 2분)';
+    pollThenGoToDashboard(data.requested_at, btn, status);
+  } catch (e) {
+    status.textContent = '오류가 발생했습니다: ' + e.message;
+    btn.disabled = false; btn.classList.remove('loading');
+  }
+}
+
+function pollThenGoToDashboard(requestedAt, btn, status) {
+  let attempts = 0;
+  const maxAttempts = 40; // 3초 x 40 = 최대 120초
+
+  const timer = setInterval(async () => {
+    attempts++;
+    try {
+      const r = await fetch('/api/last-run');
+      const d = await r.json();
+      if (d.last_run && d.last_run > requestedAt) {
+        clearInterval(timer);
+        status.textContent = '분석 완료! 대시보드로 이동합니다...';
+        setTimeout(() => { window.location.href = '/'; }, 500);
+        return;
+      }
+    } catch (e) { /* 일시적 오류는 무시하고 계속 폴링 */ }
+
+    if (attempts >= maxAttempts) {
+      clearInterval(timer);
+      status.textContent = '분석이 예상보다 오래 걸리고 있어요. 잠시 후 대시보드를 확인해보세요.';
+      btn.disabled = false; btn.classList.remove('loading');
+    }
+  }, 3000);
+}
+</script>
 
 </body>
 </html>

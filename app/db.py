@@ -334,6 +334,21 @@ def get_latest_signals_for_dashboard():
         return [dict(r) for r in rows]
 
 
+def get_recent_signals_for_codes(codes: list, limit: int = 30):
+    """관심종목들의 분석 이력을 최신순으로 반환 (신호가 갱신될 때마다 계속 쌓이는 피드용).
+    최신 1건만 보여주는 get_latest_signals_for_dashboard()와 달리, 이전 분석 결과도
+    사라지지 않고 오래된 순서로 계속 아래에 남아있습니다."""
+    if not codes:
+        return []
+    placeholders = ",".join("?" for _ in codes)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM signals WHERE code IN ({placeholders}) ORDER BY id DESC LIMIT ?",
+            list(codes) + [limit],
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
 def get_last_analysis_time():
     with get_conn() as conn:
         row = conn.execute("SELECT MAX(created_at) as t FROM signals").fetchone()
