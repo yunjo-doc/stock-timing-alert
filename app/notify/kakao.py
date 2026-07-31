@@ -40,7 +40,10 @@ def exchange_code_for_token(rest_api_key: str, code: str, redirect_uri: str, cli
     if client_secret:
         payload["client_secret"] = client_secret
     resp = requests.post(KAKAO_TOKEN_URL, data=payload)
-    resp.raise_for_status()
+    if resp.status_code >= 400:
+        # 카카오가 돌려주는 error/error_description을 그대로 노출해야 원인(시크릿 불일치,
+        # 리다이렉트 URI 불일치, 코드 재사용 등)을 화면에서 바로 확인할 수 있습니다.
+        raise RuntimeError(f"카카오 토큰 발급 실패 ({resp.status_code}): {resp.text}")
     return resp.json()
 
 
