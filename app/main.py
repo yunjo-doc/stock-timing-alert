@@ -21,7 +21,7 @@ FastAPI 메인 앱
   GET  /billing/checkout                  카드 등록(빌링키 발급) 화면 (로그인 필요)
   GET  /billing/success, /billing/fail     Toss 빌링 인증 콜백
   POST /billing/cancel                      구독 해지
-  GET  /admin/login, POST /admin/login       관리자 로그인 (ADMIN_TOKEN)
+  GET  /admin/login, POST /admin/login       관리자 로그인 (이메일/비밀번호, 최초 1회는 관리자 코드로 승격)
   POST /admin/logout                          관리자 로그아웃
   GET  /admin/members                          회원현황(관심종목/매수·매도 제안일/구독) 대시보드
   POST /admin/members/{user_id}/plan             관리자가 회원 구독 플랜 한 단계 증가/감소 (direction=up/down)
@@ -483,11 +483,23 @@ def admin_login_page(request: Request, error: str = ""):
 
 
 @app.post("/admin/login")
-def admin_login_submit(request: Request, token: str = Form(...)):
+def admin_login_submit(request: Request, email: str = Form(...), password: str = Form(...), admin_code: str = Form("")):
     cfg = load_config()
-    if token != cfg.get("admin_token"):
-        return RedirectResponse(url=f"/admin/login?error={quote('토큰이 올바르지 않습니다')}", status_code=303)
+    user = db.get_user_by_email(email)
+    if not user or not db.verify_password(user, password):
+        return RedirectResponse(url=f"/admin/login?error={quote('이메일 또는 비밀번호가 올바르지 않습니다')}", status_code=303)
+
+    if not user.get("is_admin"):
+        if admin_code and admin_code == cfg.get("admin_token"):
+            db.promote_to_admin(user["id"])
+        else:
+            return RedirectResponse(
+                url=f"/admin/login?error={quote('관리자 권한이 없는 계정입니다. 최초 1회는 관리자 코드가 필요합니다.')}",
+                status_code=303,
+            )
+
     request.session["is_admin"] = True
+    auth.login_user(request, user["id"])
     return RedirectResponse(url="/admin/members", status_code=303)
 
 

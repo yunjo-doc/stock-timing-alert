@@ -130,6 +130,7 @@ def init_db():
         _ensure_column(conn, "users", "name", "TEXT")
         _ensure_column(conn, "users", "phone", "TEXT")
         _ensure_column(conn, "users", "is_active", "INTEGER DEFAULT 1")
+        _ensure_column(conn, "users", "is_admin", "INTEGER DEFAULT 0")
         conn.commit()
 
 
@@ -272,6 +273,12 @@ def create_user_from_kakao(kakao_id: str):
         )
         conn.commit()
         return cur.lastrowid
+
+
+def promote_to_admin(user_id: int):
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET is_admin=1 WHERE id=?", (user_id,))
+        conn.commit()
 
 
 def toggle_user_active(user_id: int) -> bool:
