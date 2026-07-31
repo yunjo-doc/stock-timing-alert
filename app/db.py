@@ -375,11 +375,23 @@ def get_last_analysis_time():
         return row["t"] if row else None
 
 
-def get_recent_notifications(limit=30):
+def get_recent_notifications(limit=30, codes=None):
+    """codes를 지정하면 해당 종목코드의 알림만 반환합니다(대시보드의 증권/가상자산 탭별
+    Recent Alerts가 다른 시장 종목의 알림을 섞어 보여주지 않도록 필터링할 때 사용)."""
     with get_conn() as conn:
-        rows = conn.execute(
-            "SELECT * FROM notifications ORDER BY id DESC LIMIT ?", (limit,)
-        ).fetchall()
+        if codes is not None:
+            codes = list(codes)
+            if not codes:
+                return []
+            placeholders = ",".join("?" for _ in codes)
+            rows = conn.execute(
+                f"SELECT * FROM notifications WHERE code IN ({placeholders}) ORDER BY id DESC LIMIT ?",
+                codes + [limit],
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM notifications ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
         return [dict(r) for r in rows]
 
 

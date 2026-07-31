@@ -154,7 +154,7 @@ def dashboard(request: Request, market: str = "stock"):
         ratio = featured["volume_ratio"]
         mb_percentile = max(0, min(100, 50 + (ratio - 1) * 40))
     mb = du.maxwell_boltzmann_path(mb_percentile)
-    recent_alerts = db.get_recent_notifications(6)
+    recent_alerts = db.get_recent_notifications(6, codes=my_codes)
     analysis_feed = db.get_recent_signals_for_codes(list(my_codes), limit=30)
 
     return templates.TemplateResponse(request, "index.html", {
