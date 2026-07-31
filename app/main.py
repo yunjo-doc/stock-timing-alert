@@ -6,6 +6,7 @@ FastAPI 메인 앱
   GET  /                 대시보드 (종목별 최신 신호)
   GET  /notifications     알림 이력
   GET  /watchlist          관심종목 관리 페이지
+  GET  /api/stocks/search    종목명/코드로 검색 (관심종목 추가 화면의 찾기 기능)
   POST /watchlist/add       종목 추가
   POST /watchlist/remove     종목 삭제
   POST /run-now              수동으로 즉시 분석 실행 (관리자 토큰 필요)
@@ -47,6 +48,7 @@ from . import db
 from . import dashboard_utils as du
 from . import auth
 from .notify import kakao as kakao_mod
+from .data_source import naver as naver_mod
 from .billing import plans as billing_plans
 from .billing import toss as toss_client
 
@@ -152,6 +154,13 @@ def notifications_page(request: Request):
 # ----------------------------------------------------------------------
 # 관심종목 관리
 # ----------------------------------------------------------------------
+@app.get("/api/stocks/search")
+def api_stocks_search(request: Request, q: str = ""):
+    if not auth.current_user(request):
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    return naver_mod.search_stocks(q, limit=15)
+
+
 @app.get("/watchlist", response_class=HTMLResponse)
 def watchlist_page(request: Request, error: str = ""):
     user = auth.current_user(request)

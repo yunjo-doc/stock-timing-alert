@@ -5,6 +5,53 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Watchlist — AlphaTiming</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>
+.find-btn-row { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.find-btn {
+  display: inline-flex; align-items: center; gap: 6px; background: var(--overlay); color: var(--text);
+  border: 1px solid var(--line-strong); padding: 8px 15px; border-radius: 20px; font-size: 12.5px; font-weight: 500;
+}
+.find-btn:hover { background: var(--overlay-strong); }
+
+.code-search-wrap { position: relative; flex: 1; }
+.code-search-wrap input { width: 100%; }
+.search-dropdown {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30;
+  max-height: 220px; overflow-y: auto; background: var(--card-solid); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); box-shadow: 0 14px 26px -16px rgba(15,23,42,0.3); display: none;
+}
+.search-dropdown.open { display: block; }
+.search-result {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 14px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--line);
+}
+.search-result:last-child { border-bottom: none; }
+.search-result:hover { background: var(--overlay); }
+.search-result .r-code { font-family: var(--font-mono); color: var(--muted); font-size: 11.5px; }
+.search-result.empty { color: var(--muted); cursor: default; }
+.search-result.empty:hover { background: transparent; }
+
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(15,23,42,0.45); backdrop-filter: blur(4px);
+  align-items: center; justify-content: center; padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal-panel {
+  width: 100%; max-width: 480px; background: var(--card-solid); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg); box-shadow: 0 30px 60px -20px rgba(15,23,42,0.35);
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px; border-bottom: 1px solid var(--line);
+}
+.modal-header h2 { font-size: 14.5px; margin: 0; }
+.modal-close { background: transparent; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1; }
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 16px 20px 20px; }
+.modal-body input[type=text] { width: 100%; margin-bottom: 10px; }
+#modalResults { position: static; display: block; max-height: 320px; }
+</style>
 </head>
 <body>
 
@@ -53,9 +100,15 @@
       더 많은 종목의 신호를 받으시려면 <a href="/pricing" style="color:var(--secondary)">요금제를 업그레이드</a>해주세요.
     </div>
     {% else %}
-    <form class="form-row" action="/watchlist/add" method="post">
-      <input type="text" name="code" placeholder="종목코드 (예: 005930)" required>
-      <input type="text" name="name" placeholder="종목명 (예: 삼성전자)" required>
+    <div class="find-btn-row">
+      <button type="button" class="find-btn" onclick="openSearchModal()">🔍 종목 찾기</button>
+    </div>
+    <form class="form-row" action="/watchlist/add" method="post" id="addForm">
+      <div class="code-search-wrap">
+        <input type="text" name="code" id="codeInput" placeholder="종목코드 (예: 005930)" autocomplete="off" required>
+        <div class="search-dropdown" id="inlineDropdown"></div>
+      </div>
+      <input type="text" name="name" id="nameInput" placeholder="종목명 (예: 삼성전자)" required>
       <button type="submit">추가</button>
     </form>
     {% endif %}
@@ -93,6 +146,19 @@
   <div class="footer-note">
     종목코드는 네이버 금융 기준 6자리 숫자 코드입니다 (예: 삼성전자 005930).
     추가/삭제는 즉시 반영되며, 다음 자동분석 사이클부터 적용됩니다.
+  </div>
+</div>
+
+<div id="searchModal" class="modal-overlay" onclick="if(event.target===this) closeSearchModal()">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <h2>종목 찾기</h2>
+      <button class="modal-close" onclick="closeSearchModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" id="modalSearchInput" placeholder="종목명을 입력하세요 (예: 삼성전자)">
+      <div class="search-dropdown open" id="modalResults"></div>
+    </div>
   </div>
 </div>
 
@@ -152,6 +218,97 @@ function pollThenGoToDashboard(requestedAt, btn, status) {
       btn.disabled = false; btn.classList.remove('loading');
     }
   }, 3000);
+}
+
+// ----------------------------------------------------------------------
+// 종목 검색 (이름/코드로 찾기) — 입력창 아래 스크롤 가능한 드롭다운
+// ----------------------------------------------------------------------
+let searchTimer = null;
+
+async function searchStocks(query) {
+  if (!query || query.trim().length < 1) return [];
+  try {
+    const resp = await fetch('/api/stocks/search?q=' + encodeURIComponent(query.trim()));
+    if (!resp.ok) return [];
+    return await resp.json();
+  } catch (e) {
+    return [];
+  }
+}
+
+function renderResults(container, results, onPick) {
+  container.innerHTML = '';
+  if (!results.length) {
+    const empty = document.createElement('div');
+    empty.className = 'search-result empty';
+    empty.textContent = '검색 결과가 없습니다.';
+    container.appendChild(empty);
+    return;
+  }
+  results.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'search-result';
+    row.innerHTML = `<span>${r.name}</span><span class="r-code">${r.code}</span>`;
+    row.addEventListener('mousedown', (e) => { e.preventDefault(); onPick(r); });
+    container.appendChild(row);
+  });
+}
+
+function debouncedSearch(query, container, onPick) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(async () => {
+    const results = await searchStocks(query);
+    renderResults(container, results, onPick);
+    container.classList.toggle('open', true);
+  }, 250);
+}
+
+// 종목코드 입력창: 타이핑하면 바로 아래에 검색 드롭다운
+const codeInput = document.getElementById('codeInput');
+const inlineDropdown = document.getElementById('inlineDropdown');
+if (codeInput) {
+  codeInput.addEventListener('input', () => {
+    const q = codeInput.value;
+    if (!q) { inlineDropdown.classList.remove('open'); return; }
+    debouncedSearch(q, inlineDropdown, (r) => {
+      codeInput.value = r.code;
+      document.getElementById('nameInput').value = r.name;
+      inlineDropdown.classList.remove('open');
+    });
+  });
+  codeInput.addEventListener('blur', () => {
+    setTimeout(() => inlineDropdown.classList.remove('open'), 150);
+  });
+  codeInput.addEventListener('focus', () => {
+    if (inlineDropdown.innerHTML) inlineDropdown.classList.add('open');
+  });
+}
+
+// "종목 찾기" 버튼 -> 큰 모달에서 이름으로 검색
+function openSearchModal() {
+  document.getElementById('searchModal').classList.add('open');
+  const input = document.getElementById('modalSearchInput');
+  input.value = '';
+  document.getElementById('modalResults').innerHTML = '';
+  setTimeout(() => input.focus(), 50);
+}
+
+function closeSearchModal() {
+  document.getElementById('searchModal').classList.remove('open');
+}
+
+const modalSearchInput = document.getElementById('modalSearchInput');
+if (modalSearchInput) {
+  modalSearchInput.addEventListener('input', () => {
+    const q = modalSearchInput.value;
+    const container = document.getElementById('modalResults');
+    if (!q) { container.innerHTML = ''; return; }
+    debouncedSearch(q, container, (r) => {
+      document.getElementById('codeInput').value = r.code;
+      document.getElementById('nameInput').value = r.name;
+      closeSearchModal();
+    });
+  });
 }
 </script>
 

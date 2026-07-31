@@ -16,6 +16,7 @@
 import re
 import time
 from datetime import datetime
+from urllib.parse import quote
 
 import requests
 
@@ -92,6 +93,35 @@ def _parse_sise_day(html: str):
             "close": close_p, "volume": volume,
         })
     return rows
+
+
+def search_stocks(query: str, limit: int = 15):
+    """
+    종목명(또는 코드)으로 네이버 금융 통합검색을 호출해 {code, name} 목록을 반환합니다.
+    관심종목 추가 화면에서 종목코드를 몰라도 이름으로 찾을 수 있도록 지원합니다.
+    """
+    query = (query or "").strip()
+    if not query:
+        return []
+
+    encoded = quote(query.encode("euc-kr", errors="ignore"))
+    url = f"https://finance.naver.com/search/search.naver?query={encoded}"
+    try:
+        html = _get(url)
+    except requests.RequestException as e:
+        print(f"[네이버 검색 오류] query={query}: {e}")
+        return []
+
+    seen = set()
+    results = []
+    for code, name in re.findall(r'<a href="/item/main\.naver\?code=([A-Za-z0-9]+)">([^<]+)</a>', html):
+        if code in seen:
+            continue
+        seen.add(code)
+        results.append({"code": code, "name": name.strip()})
+        if len(results) >= limit:
+            break
+    return results
 
 
 def get_fundamental(code: str):
