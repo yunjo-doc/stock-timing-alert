@@ -388,9 +388,10 @@ def billing_cancel(request: Request):
 # 수동 실행 (관리자 전용)
 # ----------------------------------------------------------------------
 @app.post("/run-now")
-def run_now(background_tasks: BackgroundTasks, x_admin_token: str = Header(default="")):
+def run_now(request: Request, background_tasks: BackgroundTasks, x_admin_token: str = Header(default="")):
     cfg = load_config()
-    _check_admin(x_admin_token, cfg)
+    if not _is_admin_session(request):
+        _check_admin(x_admin_token, cfg)
     background_tasks.add_task(run_analysis_cycle, cfg)
     return JSONResponse({"started": True, "requested_at": datetime.now().isoformat()})
 
