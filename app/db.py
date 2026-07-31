@@ -127,6 +127,9 @@ def init_db():
 
     with get_conn() as conn:
         _ensure_column(conn, "users", "kakao_id", "TEXT")
+        _ensure_column(conn, "users", "name", "TEXT")
+        _ensure_column(conn, "users", "phone", "TEXT")
+        _ensure_column(conn, "users", "is_active", "INTEGER DEFAULT 1")
         conn.commit()
 
 
@@ -224,14 +227,14 @@ def _hash_password(password: str, salt: str) -> str:
     return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100_000).hex()
 
 
-def create_user(email: str, password: str):
+def create_user(email: str, password: str, name: str = "", phone: str = ""):
     salt = secrets.token_hex(16)
     password_hash = _hash_password(password, salt)
     with get_conn() as conn:
         try:
             cur = conn.execute(
-                "INSERT INTO users (email, password_hash, salt, created_at) VALUES (?, ?, ?, ?)",
-                (email.strip().lower(), password_hash, salt, datetime.now().isoformat()),
+                "INSERT INTO users (email, password_hash, salt, name, phone, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (email.strip().lower(), password_hash, salt, name.strip(), phone.strip(), datetime.now().isoformat()),
             )
             conn.commit()
             return cur.lastrowid
@@ -269,6 +272,16 @@ def create_user_from_kakao(kakao_id: str):
         )
         conn.commit()
         return cur.lastrowid
+
+
+def toggle_user_active(user_id: int) -> bool:
+    """계정 활성/정지 상태를 뒤집고, 변경 후 상태(True=활성)를 반환"""
+    with get_conn() as conn:
+        row = conn.execute("SELECT is_active FROM users WHERE id=?", (user_id,)).fetchone()
+        new_state = 0 if (row and row["is_active"]) else 1
+        conn.execute("UPDATE users SET is_active=? WHERE id=?", (new_state, user_id))
+        conn.commit()
+        return bool(new_state)
 
 
 def verify_password(user: dict, password: str) -> bool:
@@ -442,6 +455,21 @@ def cancel_subscription(user_id: int):
         conn.commit()
 
 
+def admin_set_subscription(user_id: int, plan: str, price: int):
+    """관리자가 결제 없이 직접 회원 플랜을 변경 (billing_key 없음 -> 자동 정기결제 대상에서 제외됨)"""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE subscriptions SET status='replaced', canceled_at=? WHERE user_id=? AND status='active'",
+            (datetime.now().isoformat(), user_id),
+        )
+        conn.execute(
+            "INSERT INTO subscriptions (user_id, plan, price, status, billing_key, customer_key, "
+            "current_period_start, current_period_end, created_at) VALUES (?,?,?,?,NULL,NULL,?,NULL,?)",
+            (user_id, plan, price, "active", datetime.now().isoformat(), datetime.now().isoformat()),
+        )
+        conn.commit()
+
+
 def get_subscriptions_due_for_renewal():
     """오늘 기준으로 결제 주기가 끝난(=갱신 결제가 필요한) 활성 구독 목록"""
     today = datetime.now().isoformat()
@@ -494,9 +522,11 @@ def get_last_signal_dates_for_codes(codes: list):
 
 
 def get_all_members_for_admin():
-    """회원별 이메일/가입일/구독플랜/관심종목/종목별 매수·매도 제안일을 모아서 반환"""
+    """회원별 이름/전화번호/이메일/가입일/구독플랜/관심종목/종목별 매수·매도 제안일을 모아서 반환"""
     with get_conn() as conn:
-        users = [dict(r) for r in conn.execute("SELECT id, email, created_at FROM users ORDER BY id DESC").fetchall()]
+        users = [dict(r) for r in conn.execute(
+            "SELECT id, email, name, phone, is_active, created_at FROM users ORDER BY id DESC"
+        ).fetchall()]
 
     all_codes = set()
     watchlist_by_user = {}
@@ -517,6 +547,9 @@ def get_all_members_for_admin():
         members.append({
             "id": u["id"],
             "email": u["email"],
+            "name": u["name"] or "",
+            "phone": u["phone"] or "",
+            "is_active": u["is_active"] is None or bool(u["is_active"]),
             "created_at": u["created_at"],
             "plan": plan_key,
             "subscription": sub,

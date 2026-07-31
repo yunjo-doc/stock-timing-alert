@@ -6,11 +6,52 @@
 <title>회원현황 — AlphaTiming Admin</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
-.member-card { padding: 20px 22px; margin-bottom: 14px; }
-.member-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
-.member-email { font-size: 14.5px; font-weight: 700; }
-.member-meta { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-top: 3px; }
-.member-badges { display: flex; gap: 8px; align-items: center; }
+.member-table th, .member-table td { white-space: nowrap; }
+.plan-stepper { display: inline-flex; align-items: center; gap: 6px; }
+.plan-stepper button {
+  width: 22px; height: 22px; padding: 0; border-radius: 50%; font-size: 12px; font-weight: 700;
+  background: var(--overlay-strong); color: var(--text); line-height: 1;
+}
+.plan-stepper button:disabled { opacity: 0.35; cursor: default; }
+.wl-btn {
+  background: transparent; border: 1px solid var(--line-strong); color: var(--secondary);
+  padding: 5px 12px; font-size: 12px; border-radius: 20px;
+}
+
+.switch { position: relative; display: inline-block; width: 40px; height: 22px; vertical-align: middle; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .slider {
+  position: absolute; cursor: pointer; inset: 0; background: var(--danger-dim);
+  border-radius: 999px; transition: background 0.15s ease;
+}
+.switch .slider::before {
+  content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px;
+  background: #fff; border-radius: 50%; transition: transform 0.15s ease;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.3);
+}
+.switch input:checked + .slider { background: var(--accent); }
+.switch input:checked + .slider::before { transform: translateX(18px); }
+.status-label { font-size: 11px; color: var(--muted); margin-left: 8px; vertical-align: middle; }
+
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(15,23,42,0.45); backdrop-filter: blur(4px);
+  align-items: center; justify-content: center; padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal-panel {
+  width: 100%; max-width: 560px; max-height: 80vh; overflow-y: auto;
+  background: var(--card-solid); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg); box-shadow: 0 30px 60px -20px rgba(15,23,42,0.35);
+}
+.modal-header {
+  position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--card-solid);
+}
+.modal-header h2 { font-size: 14px; margin: 0; }
+.modal-close { background: transparent; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1; }
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 4px 20px 20px; }
 </style>
 </head>
 <body>
@@ -34,53 +75,98 @@
 
   {% if not members %}
   <div class="empty">아직 가입한 회원이 없습니다.</div>
-  {% endif %}
-
-  {% for m in members %}
-  <div class="glass member-card fade-in">
-    <div class="member-head">
-      <div>
-        <div class="member-email">{{ m.email }}</div>
-        <div class="member-meta">
-          가입일 {{ m.created_at[:19] }} · user_id {{ m.id }}
-        </div>
-      </div>
-      <div class="member-badges">
-        <span class="chip {{ 'buy' if plans[m.plan].price > 0 else 'hold' }}">{{ plans[m.plan].name }}</span>
-        {% if m.subscription %}
-          {% if m.subscription.status == 'active' %}
-          <span class="chip buy">구독중 · 다음결제 {{ m.subscription.current_period_end[:10] }}</span>
-          {% elif m.subscription.status == 'past_due' %}
-          <span class="chip sell">결제실패 · 재시도 대기</span>
-          {% endif %}
-        {% endif %}
-        <span class="chip hold">관심종목 {{ m.watchlist_count }}개</span>
-      </div>
-    </div>
-
-    {% if m.watchlist %}
-    <table>
+  {% else %}
+  <div class="glass table-card fade-in">
+    <table class="member-table">
       <thead>
-        <tr><th>종목코드</th><th>종목명</th><th>추가일</th><th>최근 매수 제안일</th><th>최근 매도 제안일</th></tr>
+        <tr>
+          <th>이름</th><th>전화번호</th><th>이메일</th><th>가입일</th>
+          <th>구독 플랜</th><th>관심종목</th><th>계정 상태</th>
+        </tr>
       </thead>
       <tbody>
-        {% for s in m.watchlist %}
+        {% for m in members %}
         <tr>
-          <td class="mono">{{ s.code }}</td>
-          <td>{{ s.name }}</td>
-          <td class="mono">{{ s.added_at[:10] }}</td>
-          <td class="mono">{{ s.last_buy[:16] if s.last_buy else '—' }}</td>
-          <td class="mono">{{ s.last_sell[:16] if s.last_sell else '—' }}</td>
+          <td>{{ m.name or '—' }}</td>
+          <td class="mono">{{ m.phone or '—' }}</td>
+          <td>{{ m.email }}</td>
+          <td class="mono">{{ m.created_at[:10] }}</td>
+          <td>
+            <div class="plan-stepper">
+              <form method="post" action="/admin/members/{{ m.id }}/plan">
+                <input type="hidden" name="direction" value="down">
+                <button type="submit" {{ 'disabled' if m.plan == plan_order[0] else '' }}>−</button>
+              </form>
+              <span class="chip {{ 'buy' if plans[m.plan].price > 0 else 'hold' }}">{{ plans[m.plan].name }}</span>
+              <form method="post" action="/admin/members/{{ m.id }}/plan">
+                <input type="hidden" name="direction" value="up">
+                <button type="submit" {{ 'disabled' if m.plan == plan_order[-1] else '' }}>+</button>
+              </form>
+            </div>
+            <div style="font-size:11px; color:var(--muted-2); margin-top:4px;">
+              {% if m.subscription and m.subscription.status == 'past_due' %}
+                결제실패 · 재시도 대기
+              {% elif m.subscription and m.subscription.current_period_end %}
+                다음결제 {{ m.subscription.current_period_end[:10] }}
+              {% elif m.subscription %}
+                관리자 지정 (결제 없음)
+              {% endif %}
+            </div>
+          </td>
+          <td>
+            <button type="button" class="wl-btn" onclick="document.getElementById('wl-modal-{{ m.id }}').classList.add('open')">
+              보기 ({{ m.watchlist_count }})
+            </button>
+          </td>
+          <td>
+            <form method="post" action="/admin/members/{{ m.id }}/toggle-active" style="display:inline">
+              <label class="switch">
+                <input type="checkbox" {{ 'checked' if m.is_active else '' }} onchange="this.form.submit()">
+                <span class="slider"></span>
+              </label>
+              <span class="status-label">{{ '활성' if m.is_active else '정지' }}</span>
+            </form>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
-    {% else %}
-    <div class="footer-note" style="margin-top:0; border-top:none; padding-top:0;">등록한 관심종목이 없습니다.</div>
-    {% endif %}
   </div>
-  {% endfor %}
+  {% endif %}
 </div>
+
+{% for m in members %}
+<div id="wl-modal-{{ m.id }}" class="modal-overlay" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <h2>{{ m.name or m.email }} — 관심종목</h2>
+      <button class="modal-close" onclick="document.getElementById('wl-modal-{{ m.id }}').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      {% if m.watchlist %}
+      <table>
+        <thead>
+          <tr><th>종목코드</th><th>종목명</th><th>추가일</th><th>최근 매수 제안일</th><th>최근 매도 제안일</th></tr>
+        </thead>
+        <tbody>
+          {% for s in m.watchlist %}
+          <tr>
+            <td class="mono">{{ s.code }}</td>
+            <td>{{ s.name }}</td>
+            <td class="mono">{{ s.added_at[:10] }}</td>
+            <td class="mono">{{ s.last_buy[:16] if s.last_buy else '—' }}</td>
+            <td class="mono">{{ s.last_sell[:16] if s.last_sell else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="footer-note" style="margin-top:0; border-top:none; padding-top:0;">등록한 관심종목이 없습니다.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endfor %}
 
 </body>
 </html>

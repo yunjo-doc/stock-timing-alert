@@ -9,7 +9,10 @@ def current_user(request: Request):
     user_id = request.session.get("user_id")
     if not user_id:
         return None
-    return db.get_user_by_id(user_id)
+    user = db.get_user_by_id(user_id)
+    if user and user.get("is_active") == 0:
+        return None  # 관리자가 정지시킨 계정 -> 즉시 로그아웃 상태로 취급
+    return user
 
 
 def login_user(request: Request, user_id: int):

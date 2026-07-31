@@ -24,6 +24,8 @@ FastAPI 메인 앱
   GET  /admin/login, POST /admin/login       관리자 로그인 (ADMIN_TOKEN)
   POST /admin/logout                          관리자 로그아웃
   GET  /admin/members                          회원현황(관심종목/매수·매도 제안일/구독) 대시보드
+  POST /admin/members/{user_id}/plan             관리자가 회원 구독 플랜 한 단계 증가/감소 (direction=up/down)
+  POST /admin/members/{user_id}/toggle-active      회원 계정 활성/정지 토글
   GET  /api/signals              최신 신호 JSON (외부 연동용)
 """
 
@@ -195,13 +197,14 @@ def signup_page(request: Request, error: str = ""):
 
 
 @app.post("/signup")
-def signup_submit(request: Request, email: str = Form(...), password: str = Form(...), password2: str = Form(...)):
+def signup_submit(request: Request, email: str = Form(...), password: str = Form(...), password2: str = Form(...),
+                   name: str = Form(""), phone: str = Form("")):
     if password != password2:
         return RedirectResponse(url="/signup?error=" + "비밀번호가 일치하지 않습니다", status_code=303)
     if len(password) < 6:
         return RedirectResponse(url="/signup?error=" + "비밀번호는 6자 이상이어야 합니다", status_code=303)
 
-    user_id = db.create_user(email, password)
+    user_id = db.create_user(email, password, name, phone)
     if user_id is None:
         return RedirectResponse(url="/signup?error=" + "이미 가입된 이메일입니다", status_code=303)
 
@@ -221,6 +224,8 @@ def login_submit(request: Request, email: str = Form(...), password: str = Form(
     user = db.get_user_by_email(email)
     if not user or not db.verify_password(user, password):
         return RedirectResponse(url=f"/login?error=이메일 또는 비밀번호가 올바르지 않습니다&next={next}", status_code=303)
+    if user.get("is_active") == 0:
+        return RedirectResponse(url=f"/login?error={quote('정지된 계정입니다. 관리자에게 문의해주세요.')}&next={next}", status_code=303)
     auth.login_user(request, user["id"])
     return RedirectResponse(url=next, status_code=303)
 
@@ -482,5 +487,31 @@ def admin_members_page(request: Request):
     return templates.TemplateResponse(request, "admin_members.html", {
         "members": members,
         "plans": billing_plans.PLANS,
+        "plan_order": billing_plans.PLAN_ORDER,
         "user": auth.current_user(request),
     })
+
+
+@app.post("/admin/members/{user_id}/plan")
+def admin_change_plan(request: Request, user_id: int, direction: str = Form(...)):
+    if not _is_admin_session(request):
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    current_key = db.get_user_plan_key(user_id)
+    idx = billing_plans.PLAN_ORDER.index(current_key) if current_key in billing_plans.PLAN_ORDER else 0
+    if direction == "up":
+        idx = min(idx + 1, len(billing_plans.PLAN_ORDER) - 1)
+    elif direction == "down":
+        idx = max(idx - 1, 0)
+    new_key = billing_plans.PLAN_ORDER[idx]
+    new_plan = billing_plans.get_plan(new_key)
+    db.admin_set_subscription(user_id, new_key, new_plan["price"])
+    return RedirectResponse(url="/admin/members", status_code=303)
+
+
+@app.post("/admin/members/{user_id}/toggle-active")
+def admin_toggle_active(request: Request, user_id: int):
+    if not _is_admin_session(request):
+        return RedirectResponse(url="/admin/login", status_code=303)
+    db.toggle_user_active(user_id)
+    return RedirectResponse(url="/admin/members", status_code=303)
