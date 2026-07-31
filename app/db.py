@@ -349,6 +349,22 @@ def get_recent_signals_for_codes(codes: list, limit: int = 30):
         return [dict(r) for r in rows]
 
 
+def trim_signal_history(keep_per_code: int = 20):
+    """DB 용량을 최소로 유지하기 위해, 종목(code)별로 최근 keep_per_code건만 남기고
+    나머지 이전 분석 이력은 삭제합니다. '분석 피드'는 최근 이력만 보여주므로 정상 동작합니다."""
+    with get_conn() as conn:
+        conn.execute(
+            """DELETE FROM signals WHERE id IN (
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (PARTITION BY code ORDER BY id DESC) as rn
+                    FROM signals
+                ) WHERE rn > ?
+            )""",
+            (keep_per_code,),
+        )
+        conn.commit()
+
+
 def get_last_analysis_time():
     with get_conn() as conn:
         row = conn.execute("SELECT MAX(created_at) as t FROM signals").fetchone()

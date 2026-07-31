@@ -40,6 +40,12 @@
 .feed-item .feed-time { font-family: var(--font-mono); font-size: 11px; color: var(--muted-2); white-space: nowrap; }
 .feed-item.new { animation: feedPulse 1.4s ease; }
 @keyframes feedPulse { from { background: var(--accent-dim); } to { background: transparent; } }
+.feed-item.feed-hidden { display: none; }
+.feed-toggle {
+  display: block; width: 100%; margin-top: 10px; background: var(--overlay); color: var(--secondary);
+  border: 1px solid var(--line-strong); font-size: 12.5px; padding: 9px 0;
+}
+.feed-toggle:hover { background: var(--overlay-strong); }
 </style>
 </head>
 <body>
@@ -106,7 +112,7 @@
   <div class="glass panel fade-in">
     <div class="feed-list">
       {% for f in analysis_feed %}
-      <div class="feed-item {{ f.signal|lower }} {{ 'new' if loop.first else '' }}">
+      <div class="feed-item {{ f.signal|lower }} {{ 'new' if loop.first else '' }} {{ 'feed-hidden' if loop.index0 >= 3 else '' }}">
         <div class="feed-left">
           <span class="chip {{ f.signal|lower }}">{{ f.signal }}</span>
           <span class="feed-name">{{ f.name }} ({{ f.code }})</span>
@@ -116,6 +122,12 @@
       </div>
       {% endfor %}
     </div>
+    {% if analysis_feed|length > 3 %}
+    <button type="button" id="feedToggleBtn" class="feed-toggle" data-expanded="false"
+            data-count="{{ analysis_feed|length - 3 }}" onclick="toggleFeedHistory()">
+      이전 기록 보기 ({{ analysis_feed|length - 3 }}건)
+    </button>
+    {% endif %}
   </div>
 
   <!-- Section 1: Market Summary Cards -->
@@ -146,6 +158,36 @@
   </div>
 
   {% if featured %}
+  {#
+    손절가/목표가는 항상 "지금 매수 진입한다면"을 가정한 ATR 기반 계산값입니다.
+    SELL 신호일 때 그대로 보여주면 "오르면 파세요"처럼 오해되므로, 현재가를
+    기준으로 대칭 반전시켜 "하락 목표가/반등 손절가"로 재해석해 보여줍니다.
+    HOLD는 방향성 추천이 아니므로 예상 변동 상단/하단으로 표시합니다.
+  #}
+  {% if featured.target_price and featured.stop_loss %}
+    {% set price = featured.current_price or 0 %}
+    {% if featured.signal == 'SELL' %}
+      {% set disp_target = 2 * price - featured.target_price %}
+      {% set disp_stop = 2 * price - featured.stop_loss %}
+      {% set target_label = '하락 목표가' %}
+      {% set stop_label = '반등 손절가' %}
+    {% elif featured.signal == 'HOLD' %}
+      {% set disp_target = featured.target_price %}
+      {% set disp_stop = featured.stop_loss %}
+      {% set target_label = '예상 상단' %}
+      {% set stop_label = '예상 하단' %}
+    {% else %}
+      {% set disp_target = featured.target_price %}
+      {% set disp_stop = featured.stop_loss %}
+      {% set target_label = '목표가' %}
+      {% set stop_label = '손절가' %}
+    {% endif %}
+  {% else %}
+    {% set disp_target = none %}
+    {% set disp_stop = none %}
+    {% set target_label = '목표가' %}
+    {% set stop_label = '손절가' %}
+  {% endif %}
   <!-- Section 2: Timing Analysis -->
   <div class="section-title"><span class="n">02</span> Timing Analysis — {{ featured.name }} ({{ featured.code }})</div>
   <div class="timing-grid">
@@ -185,12 +227,12 @@
           <div class="v" style="font-size:14px">{{ summary.risk_level }}</div>
         </div>
         <div class="confidence-row">
-          <div class="k">Target Price</div>
-          <div class="v" style="font-size:14px">{{ '{:,.0f}'.format(featured.target_price) if featured.target_price else '—' }}원</div>
+          <div class="k">{{ target_label }}</div>
+          <div class="v" style="font-size:14px">{{ '{:,.0f}'.format(disp_target) if disp_target is not none else '—' }}원</div>
         </div>
         <div class="confidence-row">
-          <div class="k">Stop Loss</div>
-          <div class="v" style="font-size:14px">{{ '{:,.0f}'.format(featured.stop_loss) if featured.stop_loss else '—' }}원</div>
+          <div class="k">{{ stop_label }}</div>
+          <div class="v" style="font-size:14px">{{ '{:,.0f}'.format(disp_stop) if disp_stop is not none else '—' }}원</div>
         </div>
       </div>
     </div>
@@ -222,8 +264,8 @@
       <div class="ai-metric"><div class="k">시장온도</div><div class="v">{{ featured.market_temperature if featured.market_temperature is not none else '—' }}</div></div>
       <div class="ai-metric"><div class="k">RSI</div><div class="v">{{ featured.rsi if featured.rsi is not none else '—' }}</div></div>
       <div class="ai-metric"><div class="k">추세</div><div class="v" style="font-size:12px">{{ featured.trend_alignment or '—' }}</div></div>
-      <div class="ai-metric"><div class="k">손절가</div><div class="v">{{ '{:,.0f}'.format(featured.stop_loss) if featured.stop_loss else '—' }}</div></div>
-      <div class="ai-metric"><div class="k">목표가</div><div class="v">{{ '{:,.0f}'.format(featured.target_price) if featured.target_price else '—' }}</div></div>
+      <div class="ai-metric"><div class="k">{{ stop_label }}</div><div class="v">{{ '{:,.0f}'.format(disp_stop) if disp_stop is not none else '—' }}</div></div>
+      <div class="ai-metric"><div class="k">{{ target_label }}</div><div class="v">{{ '{:,.0f}'.format(disp_target) if disp_target is not none else '—' }}</div></div>
     </div>
   </div>
   {% endif %}
@@ -345,6 +387,15 @@ function pollForCompletion(requestedAt, btn, status) {
       btn.disabled = false; btn.classList.remove('loading');
     }
   }, 3000);
+}
+
+function toggleFeedHistory() {
+  const btn = document.getElementById('feedToggleBtn');
+  const hiddenItems = document.querySelectorAll('.feed-item.feed-hidden');
+  const expanding = btn.dataset.expanded !== 'true';
+  hiddenItems.forEach(el => { el.style.display = expanding ? 'flex' : 'none'; });
+  btn.dataset.expanded = expanding ? 'true' : 'false';
+  btn.textContent = expanding ? '접기' : `이전 기록 보기 (${btn.dataset.count}건)`;
 }
 
 // 다음 자동분석까지 남은 시간 카운트다운

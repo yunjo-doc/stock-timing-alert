@@ -52,6 +52,7 @@ def run_analysis_cycle(cfg: dict):
         db.upsert_last_signal(code, curr_signal, result.get("final_score", 0))
         results.append(result)
 
+    db.trim_signal_history(keep_per_code=20)  # DB 용량 최소화: 종목당 최근 20건만 유지
     print("===== 분석 사이클 종료 =====\n")
     return results
 
