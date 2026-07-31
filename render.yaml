@@ -2,7 +2,7 @@ services:
   - type: web
     name: stock-timing-alert
     env: python
-    plan: free
+    plan: starter # Persistent Disk(아래 disk 설정)는 무료 플랜에서 지원되지 않습니다
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
@@ -12,3 +12,9 @@ services:
         sync: false
       - key: KAKAO_REST_API_KEY
         sync: false
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: alphatiming-data
+      mountPath: /var/data
+      sizeGB: 1

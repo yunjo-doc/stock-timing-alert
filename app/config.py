@@ -18,7 +18,9 @@ except ImportError:
     pass
 
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
-DATA_DIR = os.path.join(BASE_DIR, "data")
+# Render 등에서 재배포 시에도 회원/DB 데이터가 사라지지 않도록, Persistent Disk를
+# 마운트한 경로를 DATA_DIR 환경변수로 지정할 수 있습니다 (미설정 시 기존 동작 유지).
+DATA_DIR = os.getenv("DATA_DIR", os.path.join(BASE_DIR, "data"))
 os.makedirs(DATA_DIR, exist_ok=True)
 
 
