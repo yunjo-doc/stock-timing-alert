@@ -11,6 +11,10 @@
 }
 .hero-band h2 { font-size: 24px; margin: 0; letter-spacing: -0.01em; }
 .hero-band p { font-size: 13.5px; color: var(--muted); margin: 0; }
+.hero-disclaimer {
+  color: var(--danger) !important; font-size: 12px !important; font-weight: 600;
+  line-height: 1.6; margin-top: 10px !important;
+}
 .hero-cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
 .hero-cta button.ghost { background: transparent; border: 1px solid rgba(37,99,235,0.4); color: var(--secondary); }
 @media (min-width: 720px) {
@@ -90,6 +94,11 @@
     <p>
       데이터 기반 AI가 확률분포·시장온도·추세·펀더멘털·리스크를 종합해
       {{ '코인 시장의' if market == 'crypto' else '' }} 최적의 투자 시점을 분석합니다.
+    </p>
+    <p class="hero-disclaimer">
+      본 플랫폼에서 제공하는 모든 정보는 투자 참고 자료이며, 특정 금융상품의 매수·매도를
+      권유하거나 보장하는 것이 아닙니다. 모든 투자 및 매매에 대한 최종 판단과 그에 따른
+      책임은 전적으로 투자자 본인에게 있습니다.
     </p>
     <div class="hero-cta">
       <a href="{{ ('/watchlist?market=' ~ market) if user else '/signup' }}"><button type="button">무료 분석 시작</button></a>
