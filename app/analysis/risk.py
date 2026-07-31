@@ -28,6 +28,15 @@ def atr(ohlc_rows, period=14):
     return sum(recent_trs) / len(recent_trs)
 
 
+def _round_price(value):
+    """1원 이상은 정수(원 단위)로, 1원 미만(초소액 가상자산 등)은 유효숫자가
+    사라지지 않도록 소수점 그대로 반올림합니다. round(value) 단독 호출은
+    1원 미만 가격을 전부 0으로 뭉개버려서 별도로 처리합니다."""
+    if abs(value) >= 1:
+        return round(value)
+    return round(value, 8)
+
+
 def risk_plan(ohlc_rows, cfg) -> dict:
     """
     ATR 기반 손절가/목표가, 그리고 계좌 자본 대비 추천 매수 수량을 계산합니다.
@@ -38,8 +47,8 @@ def risk_plan(ohlc_rows, cfg) -> dict:
         return {"score": 0.0, "detail": {}, "note": "ATR 계산을 위한 데이터 부족"}
 
     last_close = ohlc_rows[-1]["close"]
-    stop_loss = round(last_close - a * r["atr_stop_multiple"])
-    target = round(last_close + a * r["atr_target_multiple"])
+    stop_loss = _round_price(last_close - a * r["atr_stop_multiple"])
+    target = _round_price(last_close + a * r["atr_target_multiple"])
 
     risk_amount = r["account_capital_krw"] * (r["risk_per_trade_pct"] / 100)
     per_share_risk = max(last_close - stop_loss, 1)

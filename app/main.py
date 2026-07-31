@@ -72,6 +72,7 @@ app = FastAPI(title="AlphaTiming")
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "dev-insecure-secret-change-me"))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "app", "templates"))
 templates.env.filters["from_json"] = lambda s: __import__("json").loads(s) if s else []
+templates.env.filters["price"] = du.format_price
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "app", "static")), name="static")
 
 _scheduler = BackgroundScheduler()

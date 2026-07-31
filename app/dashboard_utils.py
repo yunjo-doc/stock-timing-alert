@@ -131,13 +131,29 @@ def pick_featured_stock(signals: list):
     return max(signals, key=lambda s: abs(s.get("final_score") or 0))
 
 
+def format_price(value):
+    """가격 표시용 포맷. 1원 이상은 천단위 콤마 정수로, 1원 미만(초소액 가상자산 등)은
+    '{:,.0f}' 포맷 시 전부 0으로 보이는 문제를 피하기 위해 유효숫자가 보이도록 표시합니다."""
+    if value is None:
+        return "—"
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    if abs(value) >= 1:
+        return f"{value:,.0f}"
+    if value == 0:
+        return "0"
+    return f"{value:.8f}".rstrip("0").rstrip(".")
+
+
 def build_signal_timeline(stock: dict):
     """featured 종목 하나에 대한 5단계 시그널 타임라인 상태"""
     if not stock:
         return []
 
     steps = [
-        {"label": "시가 형성", "detail": f"{stock.get('current_price') or 0:,.0f}원", "state": "done"},
+        {"label": "시가 형성", "detail": f"{format_price(stock.get('current_price'))}원", "state": "done"},
         {
             "label": "확률 신호 감지",
             "detail": f"z={stock.get('z_score')}" if stock.get("z_score") is not None else "데이터 없음",

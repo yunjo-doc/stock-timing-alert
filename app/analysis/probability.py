@@ -75,6 +75,12 @@ def zscore_analysis(closes, window: int = 20):
     }
 
 
+def _round_price(value, digits: int = 1):
+    """1원 미만(초소액 가상자산 등)은 소수점 1자리 반올림 시 0으로 뭉개지므로,
+    유효숫자가 보이도록 자리수를 늘려서 반올림합니다."""
+    return round(value, digits) if abs(value) >= 1 else round(value, 8)
+
+
 def bollinger_bands(closes, window: int = 20, k: float = 2.0):
     """
     볼린저 밴드 = window 이동평균 ± k * 표준편차(가격 기준, %가 아닌 원 단위)
@@ -98,9 +104,9 @@ def bollinger_bands(closes, window: int = 20, k: float = 2.0):
         position = "inside"
 
     return {
-        "ma": round(ma, 1),
-        "upper": round(upper, 1),
-        "lower": round(lower, 1),
+        "ma": _round_price(ma),
+        "upper": _round_price(upper),
+        "lower": _round_price(lower),
         "price": price,
         "position": position,
     }

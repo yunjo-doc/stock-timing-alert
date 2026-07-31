@@ -144,7 +144,7 @@
         <div class="feed-left">
           <span class="chip {{ f.signal|lower }}">{{ f.signal }}</span>
           <span class="feed-name">{{ f.name }} ({{ f.code }})</span>
-          <span class="feed-meta">{{ '{:,.0f}'.format(f.current_price or 0) }}원 · 종합점수 {{ f.final_score }}</span>
+          <span class="feed-meta">{{ f.current_price|price }}원 · 종합점수 {{ f.final_score }}</span>
         </div>
         <span class="feed-time">{{ f.created_at[:16] }}</span>
       </div>
@@ -192,7 +192,7 @@
     기준으로 대칭 반전시켜 "하락 목표가/반등 손절가"로 재해석해 보여줍니다.
     HOLD는 방향성 추천이 아니므로 예상 변동 상단/하단으로 표시합니다.
   #}
-  {% if featured.target_price and featured.stop_loss %}
+  {% if featured.target_price is not none and featured.stop_loss is not none %}
     {% set price = featured.current_price or 0 %}
     {% if featured.signal == 'SELL' %}
       {% set disp_target = 2 * price - featured.target_price %}
@@ -248,7 +248,7 @@
       <div class="rec-grid">
         <div class="confidence-row">
           <div class="k">Current Price</div>
-          <div class="v" style="font-size:14px">{{ '{:,.0f}'.format(featured.current_price or 0) }}원</div>
+          <div class="v" style="font-size:14px">{{ featured.current_price|price }}원</div>
         </div>
         <div class="confidence-row">
           <div class="k">Risk</div>
@@ -256,11 +256,11 @@
         </div>
         <div class="confidence-row">
           <div class="k">{{ target_label }}</div>
-          <div class="v" style="font-size:14px">{{ '{:,.0f}'.format(disp_target) if disp_target is not none else '—' }}원</div>
+          <div class="v" style="font-size:14px">{{ disp_target|price }}원</div>
         </div>
         <div class="confidence-row">
           <div class="k">{{ stop_label }}</div>
-          <div class="v" style="font-size:14px">{{ '{:,.0f}'.format(disp_stop) if disp_stop is not none else '—' }}원</div>
+          <div class="v" style="font-size:14px">{{ disp_stop|price }}원</div>
         </div>
       </div>
     </div>
@@ -292,8 +292,8 @@
       <div class="ai-metric"><div class="k">시장온도</div><div class="v">{{ featured.market_temperature if featured.market_temperature is not none else '—' }}</div></div>
       <div class="ai-metric"><div class="k">RSI</div><div class="v">{{ featured.rsi if featured.rsi is not none else '—' }}</div></div>
       <div class="ai-metric"><div class="k">추세</div><div class="v" style="font-size:12px">{{ featured.trend_alignment or '—' }}</div></div>
-      <div class="ai-metric"><div class="k">{{ stop_label }}</div><div class="v">{{ '{:,.0f}'.format(disp_stop) if disp_stop is not none else '—' }}</div></div>
-      <div class="ai-metric"><div class="k">{{ target_label }}</div><div class="v">{{ '{:,.0f}'.format(disp_target) if disp_target is not none else '—' }}</div></div>
+      <div class="ai-metric"><div class="k">{{ stop_label }}</div><div class="v">{{ disp_stop|price }}</div></div>
+      <div class="ai-metric"><div class="k">{{ target_label }}</div><div class="v">{{ disp_target|price }}</div></div>
     </div>
   </div>
   {% endif %}
@@ -313,7 +313,7 @@
         <tr>
           <td class="ticker">{{ s.code }}</td>
           <td class="name">{{ s.name }}</td>
-          <td class="mono">{{ '{:,.0f}'.format(s.current_price or 0) }}</td>
+          <td class="mono">{{ s.current_price|price }}</td>
           <td class="mono delta {{ 'up' if (s.daily_return_pct or 0) >= 0 else 'down' }}">
             {{ '{:+.2f}'.format(s.daily_return_pct) if s.daily_return_pct is not none else '—' }}%
           </td>
