@@ -22,6 +22,7 @@ FastAPI 메인 앱
   GET  /billing/checkout                  카드 등록(빌링키 발급) 화면 (로그인 필요)
   GET  /billing/success, /billing/fail     Toss 빌링 인증 콜백
   POST /billing/cancel                      구독 해지
+  POST /billing/downgrade                    하위 플랜으로 변경 예약 (다음 결제일에 하위 플랜 금액으로 청구)
   GET  /admin/login, POST /admin/login       관리자 로그인 (이메일/비밀번호, 최초 1회는 관리자 코드로 승격)
   POST /admin/logout                          관리자 로그아웃
   GET  /admin/members                          회원현황(관심종목/매수·매도 제안일/구독) 대시보드
@@ -318,17 +319,19 @@ def kakao_login_callback(request: Request, code: str = ""):
 # 내 계정 (구독 현황 + 카카오 '나에게 채팅' 연동 관리)
 # ----------------------------------------------------------------------
 @app.get("/account", response_class=HTMLResponse)
-def account_page(request: Request, subscribed: int = 0, canceled: int = 0):
+def account_page(request: Request, subscribed: int = 0, canceled: int = 0, downgrade_scheduled: int = 0):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/account", status_code=303)
 
     plan = billing_plans.get_plan(db.get_user_plan_key(user["id"]))
     subscription = db.get_active_subscription(user["id"])
+    pending_plan = billing_plans.get_plan(subscription["pending_plan"]) if subscription and subscription.get("pending_plan") else None
     payments = db.get_user_payments(user["id"])
     return templates.TemplateResponse(request, "account.html", {
         "user": user, "plan": plan, "subscription": subscription, "payments": payments,
-        "subscribed": subscribed, "canceled": canceled,
+        "pending_plan": pending_plan,
+        "subscribed": subscribed, "canceled": canceled, "downgrade_scheduled": downgrade_scheduled,
     })
 
 
@@ -339,10 +342,16 @@ def account_page(request: Request, subscribed: int = 0, canceled: int = 0):
 def pricing_page(request: Request):
     user = auth.current_user(request)
     current_plan = db.get_user_plan_key(user["id"]) if user else "free"
+    current_index = billing_plans.PLAN_ORDER.index(current_plan) if current_plan in billing_plans.PLAN_ORDER else 0
+    subscription = db.get_active_subscription(user["id"]) if user else None
     return templates.TemplateResponse(request, "pricing.html", {
         "user": user,
         "plans": [billing_plans.get_plan(k) for k in billing_plans.PLAN_ORDER],
+        "plan_order": billing_plans.PLAN_ORDER,
         "current_plan": current_plan,
+        "current_index": current_index,
+        "subscription": subscription,
+        "pending_plan_key": subscription.get("pending_plan") if subscription else None,
     })
 
 
@@ -425,6 +434,31 @@ def billing_cancel(request: Request):
         return RedirectResponse(url="/login?next=/account", status_code=303)
     db.cancel_subscription(user["id"])
     return RedirectResponse(url="/account?canceled=1", status_code=303)
+
+
+@app.post("/billing/downgrade")
+def billing_downgrade(request: Request, plan: str = Form(...)):
+    """상위 플랜 -> 하위 플랜 변경 예약. 현재 결제 주기(다음 결제일)가 끝날 때까지는 기존 플랜을
+    그대로 이용하고, 다음 결제일에 하위 플랜 금액으로 자동 청구됩니다(무료 플랜이면 청구 없이 종료)."""
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/pricing", status_code=303)
+
+    sub = db.get_active_subscription(user["id"])
+    if not sub:
+        return RedirectResponse(url="/pricing", status_code=303)
+
+    current_key = sub["plan"]
+    target_plan = billing_plans.get_plan(plan)
+    order = billing_plans.PLAN_ORDER
+    if current_key not in order or target_plan["key"] not in order:
+        return RedirectResponse(url="/pricing", status_code=303)
+    if order.index(target_plan["key"]) >= order.index(current_key):
+        # 하위 플랜이 아니면(=상위 플랜/동일 플랜) 이 라우트로 처리하지 않음
+        return RedirectResponse(url="/pricing", status_code=303)
+
+    db.schedule_plan_change(sub["id"], target_plan["key"], target_plan["price"])
+    return RedirectResponse(url="/account?downgrade_scheduled=1", status_code=303)
 
 
 # ----------------------------------------------------------------------

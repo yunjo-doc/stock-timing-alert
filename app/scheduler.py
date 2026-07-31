@@ -78,8 +78,18 @@ def run_billing_cycle():
     print(f"[정기결제] 청구 대상 {len(due)}건")
 
     for sub in due:
-        plan = get_plan(sub["plan"])
-        order_id = f"renew-{sub['user_id']}-{uuid.uuid4().hex[:12]}"
+        pending_plan_key = sub.get("pending_plan")
+
+        # 하위 플랜(무료)으로 예약된 다운그레이드는 결제 없이 구독을 종료합니다.
+        if pending_plan_key and get_plan(pending_plan_key)["price"] <= 0:
+            db.cancel_pending_downgrade_to_free(sub["id"])
+            print(f"[플랜 다운그레이드] user_id={sub['user_id']} plan={sub['plan']} -> free (청구 없음)")
+            continue
+
+        # 예약된 다운그레이드가 있으면 이번 결제 주기부터 하위 플랜 금액으로 청구합니다.
+        plan = get_plan(pending_plan_key) if pending_plan_key else get_plan(sub["plan"])
+        order_prefix = "downgrade" if pending_plan_key else "renew"
+        order_id = f"{order_prefix}-{sub['user_id']}-{uuid.uuid4().hex[:12]}"
         try:
             charge = toss_client.charge_billing(
                 sub["billing_key"], sub["customer_key"], plan["price"], order_id,
@@ -88,16 +98,20 @@ def run_billing_cycle():
         except toss_client.TossError as e:
             print(f"[정기결제 실패] user_id={sub['user_id']} plan={sub['plan']}: {e}")
             db.mark_subscription_past_due(sub["id"])
-            db.log_payment(sub["user_id"], sub["id"], order_id, sub["plan"], plan["price"],
+            db.log_payment(sub["user_id"], sub["id"], order_id, plan["key"], plan["price"],
                             "failed", "card", str(e))
             continue
 
         now = datetime.now()
         period_end = now + timedelta(days=BILLING_PERIOD_DAYS)
-        db.renew_subscription(sub["id"], now.isoformat(), period_end.isoformat())
-        db.log_payment(sub["user_id"], sub["id"], order_id, sub["plan"], plan["price"],
+        db.renew_subscription_with_plan(sub["id"], plan["key"], plan["price"],
+                                         now.isoformat(), period_end.isoformat())
+        db.log_payment(sub["user_id"], sub["id"], order_id, plan["key"], plan["price"],
                         "paid", charge.get("method", "card"), "")
-        print(f"[정기결제 완료] user_id={sub['user_id']} plan={sub['plan']}")
+        if pending_plan_key:
+            print(f"[플랜 다운그레이드 적용/결제 완료] user_id={sub['user_id']} -> {plan['key']}")
+        else:
+            print(f"[정기결제 완료] user_id={sub['user_id']} plan={sub['plan']}")
 
 
 def _build_message(result: dict) -> str:

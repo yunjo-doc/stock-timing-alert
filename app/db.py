@@ -133,6 +133,8 @@ def init_db():
         _ensure_column(conn, "users", "is_active", "INTEGER DEFAULT 1")
         _ensure_column(conn, "users", "is_admin", "INTEGER DEFAULT 0")
         _ensure_column(conn, "user_watchlist", "market", "TEXT NOT NULL DEFAULT 'stock'")
+        _ensure_column(conn, "subscriptions", "pending_plan", "TEXT")
+        _ensure_column(conn, "subscriptions", "pending_price", "INTEGER")
         conn.commit()
 
 
@@ -480,6 +482,39 @@ def renew_subscription(subscription_id, period_start, period_end):
         conn.execute(
             "UPDATE subscriptions SET current_period_start=?, current_period_end=?, status='active' WHERE id=?",
             (period_start, period_end, subscription_id),
+        )
+        conn.commit()
+
+
+def renew_subscription_with_plan(subscription_id, plan, price, period_start, period_end):
+    """갱신 결제 성공 시 호출. 예약된 다운그레이드가 있었다면 이 시점에 실제 플랜을 반영하고
+    예약 정보(pending_plan/pending_price)를 비웁니다."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE subscriptions SET plan=?, price=?, current_period_start=?, current_period_end=?, "
+            "status='active', pending_plan=NULL, pending_price=NULL WHERE id=?",
+            (plan, price, period_start, period_end, subscription_id),
+        )
+        conn.commit()
+
+
+def schedule_plan_change(subscription_id: int, new_plan: str, new_price: int):
+    """상위->하위 플랜 변경 예약. 현재 결제 주기가 끝날 때(30일 후) 자동으로 적용됩니다."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE subscriptions SET pending_plan=?, pending_price=? WHERE id=?",
+            (new_plan, new_price, subscription_id),
+        )
+        conn.commit()
+
+
+def cancel_pending_downgrade_to_free(subscription_id: int):
+    """하위 플랜(무료)으로의 예약 다운그레이드가 결제 주기 종료 시점에 적용될 때, 청구 없이 구독을 종료합니다."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE subscriptions SET status='canceled', canceled_at=?, pending_plan=NULL, pending_price=NULL "
+            "WHERE id=?",
+            (datetime.now().isoformat(), subscription_id),
         )
         conn.commit()
 

@@ -36,6 +36,11 @@
     구독이 해지되었습니다. 다음 결제 주기부터는 Free 플랜이 적용됩니다.
   </div>
   {% endif %}
+  {% if downgrade_scheduled %}
+  <div class="glass panel fade-in" style="margin-bottom:16px; padding:14px 18px; font-size:13px; color:var(--muted);">
+    플랜 변경이 예약되었습니다. 다음 결제일까지는 현재 플랜을 그대로 이용하실 수 있습니다.
+  </div>
+  {% endif %}
 
   <div class="glass panel fade-in">
     <div style="font-size:13px; color:var(--muted); margin-bottom:4px;">이메일</div>
@@ -52,6 +57,12 @@
         · 다음 결제일 {{ subscription.current_period_end[:10] }}
       {% endif %}
     </div>
+    {% if pending_plan %}
+    <div style="font-size:12.5px; color:var(--secondary); margin-bottom:14px;">
+      {{ subscription.current_period_end[:10] if subscription and subscription.current_period_end else '다음 결제일' }}부터
+      <strong>{{ pending_plan.name }}</strong> 플랜({{ '{:,}'.format(pending_plan.price) }}원/월)으로 변경될 예정입니다.
+    </div>
+    {% endif %}
     <div style="display:flex; gap:10px; margin-bottom:8px;">
       <a href="/pricing"><button type="button" style="background:transparent; border:1px solid var(--line-strong); color:var(--text);">요금제 변경</button></a>
       {% if plan.price > 0 %}
