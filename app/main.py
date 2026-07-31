@@ -74,6 +74,20 @@ app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "de
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "app", "templates"))
 templates.env.filters["from_json"] = lambda s: __import__("json").loads(s) if s else []
 templates.env.filters["price"] = du.format_price
+
+
+def _tojson_attr(obj):
+    """분석 피드 항목 클릭 시 JS로 상세 패널을 갱신하기 위해, dict를 HTML 속성에
+    안전하게 담을 수 있도록 이스케이프된 JSON 문자열로 변환합니다.
+    Markup으로 감싸지 않으면 Jinja autoescape가 이스케이프된 결과를 다시 한 번
+    이스케이프해서(&quot; -> &amp;quot;) 브라우저가 원래 문자열로 복원하지 못합니다."""
+    import html as _html
+    import json as _json
+    from markupsafe import Markup
+    return Markup(_html.escape(_json.dumps(obj, ensure_ascii=False, default=str)))
+
+
+templates.env.filters["tojson_attr"] = _tojson_attr
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "app", "static")), name="static")
 
 _scheduler = BackgroundScheduler()

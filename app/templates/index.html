@@ -64,7 +64,10 @@
 .feed-item {
   padding: 13px 18px; border-left: 3px solid var(--line-strong);
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px;
+  cursor: pointer; transition: background .15s, border-left-width .15s;
 }
+.feed-item:hover { background: var(--overlay); }
+.feed-item.selected { background: var(--secondary-dim); border-left-width: 5px; }
 .feed-item.buy { border-left-color: var(--accent); }
 .feed-item.sell { border-left-color: var(--danger); }
 .feed-item.hold { border-left-color: var(--warning); }
@@ -188,7 +191,8 @@
   <div class="glass panel fade-in">
     <div class="feed-list">
       {% for f in analysis_feed %}
-      <div class="feed-item {{ f.signal|lower }} {{ 'new' if loop.first else '' }} {{ 'feed-hidden' if loop.index0 >= 3 else '' }}">
+      <div class="feed-item {{ f.signal|lower }} {{ 'new' if loop.first else '' }} {{ 'feed-hidden' if loop.index0 >= 3 else '' }}"
+           data-signal="{{ f|tojson_attr }}" onclick="selectFeedSignal(this)">
         <div class="feed-left">
           <span class="chip {{ f.signal|lower }}">{{ f.signal }}</span>
           <span class="feed-name">{{ f.name }} ({{ f.code }})</span>
@@ -265,50 +269,50 @@
     {% set stop_label = '손절가' %}
   {% endif %}
   <!-- Section 2: Timing Analysis -->
-  <div class="section-title"><span class="n">02</span> Timing Analysis — {{ featured.name }} ({{ featured.code }})</div>
+  <div class="section-title"><span class="n">02</span> Timing Analysis — <span id="timingTitle">{{ featured.name }} ({{ featured.code }})</span></div>
   <div class="timing-grid">
     <div class="glass chart-card fade-in">
       <div class="chart-title">Normal Distribution — 가격 위치</div>
-      <div class="chart-sub">z = {{ featured.z_score if featured.z_score is not none else '—' }}</div>
+      <div class="chart-sub">z = <span id="zSubLabel">{{ featured.z_score if featured.z_score is not none else '—' }}</span></div>
       <svg viewBox="0 0 {{ bell.width }} {{ bell.height }}" width="100%" height="150">
         <polygon class="bell-area" points="{{ bell.area_points }}" fill="var(--secondary)"></polygon>
         <polyline class="bell-line" points="{{ bell.line_points }}" stroke="var(--secondary)"></polyline>
-        <circle class="bell-marker" cx="{{ bell.marker_x }}" cy="{{ bell.marker_y }}" r="5" fill="var(--secondary)"></circle>
+        <circle id="bellMarker" class="bell-marker" cx="{{ bell.marker_x }}" cy="{{ bell.marker_y }}" r="5" fill="var(--secondary)"></circle>
       </svg>
     </div>
     <div class="glass chart-card fade-in" style="animation-delay:.05s">
       <div class="chart-title">Maxwell–Boltzmann — 거래 에너지</div>
-      <div class="chart-sub">평균 대비 {{ featured.volume_ratio if featured.volume_ratio is not none else '—' }}배</div>
+      <div class="chart-sub">평균 대비 <span id="mbSubLabel">{{ featured.volume_ratio if featured.volume_ratio is not none else '—' }}</span>배</div>
       <svg viewBox="0 0 {{ mb.width }} {{ mb.height }}" width="100%" height="150">
         <polygon class="bell-area" points="{{ mb.area_points }}" fill="var(--accent)"></polygon>
         <polyline class="bell-line" points="{{ mb.line_points }}" stroke="var(--accent)"></polyline>
-        <circle class="bell-marker" cx="{{ mb.marker_x }}" cy="{{ mb.marker_y }}" r="5" fill="var(--accent)"></circle>
+        <circle id="mbMarker" class="bell-marker" cx="{{ mb.marker_x }}" cy="{{ mb.marker_y }}" r="5" fill="var(--accent)"></circle>
       </svg>
     </div>
     <div class="glass confidence-panel fade-in" style="animation-delay:.1s">
       <div class="chart-title" style="margin-bottom:0">Today's Recommendation</div>
-      <span class="rec-badge {{ featured.signal|lower }}">{{ featured.signal }}</span>
+      <span id="recBadge" class="rec-badge {{ featured.signal|lower }}">{{ featured.signal }}</span>
       <div class="confidence-row">
         <div class="k">Confidence Score</div>
-        <div class="v">{{ ((featured.final_score or 0)|abs * 100)|round(1) }}%</div>
-        <div class="confidence-bar"><span style="width:{{ ((featured.final_score or 0)|abs * 100)|round(0) }}%"></span></div>
+        <div class="v" id="confidenceValue">{{ ((featured.final_score or 0)|abs * 100)|round(1) }}%</div>
+        <div class="confidence-bar"><span id="confidenceBarInner" style="width:{{ ((featured.final_score or 0)|abs * 100)|round(0) }}%"></span></div>
       </div>
       <div class="rec-grid">
         <div class="confidence-row">
           <div class="k">Current Price</div>
-          <div class="v" style="font-size:14px">{{ featured.current_price|price }}원</div>
+          <div class="v" id="currentPriceValue" style="font-size:14px">{{ featured.current_price|price }}원</div>
         </div>
         <div class="confidence-row">
           <div class="k">Risk</div>
           <div class="v" style="font-size:14px">{{ summary.risk_level }}</div>
         </div>
         <div class="confidence-row">
-          <div class="k">{{ target_label }}</div>
-          <div class="v" style="font-size:14px">{{ disp_target|price }}원</div>
+          <div class="k" id="targetLabel">{{ target_label }}</div>
+          <div class="v" id="targetValue" style="font-size:14px">{{ disp_target|price }}원</div>
         </div>
         <div class="confidence-row">
-          <div class="k">{{ stop_label }}</div>
-          <div class="v" style="font-size:14px">{{ disp_stop|price }}원</div>
+          <div class="k" id="stopLabel">{{ stop_label }}</div>
+          <div class="v" id="stopValue" style="font-size:14px">{{ disp_stop|price }}원</div>
         </div>
       </div>
     </div>
@@ -317,7 +321,7 @@
   <!-- Section 3: Signal Timeline -->
   <div class="section-title"><span class="n">03</span> Signal Timeline</div>
   <div class="glass timeline-card fade-in">
-    <div class="timeline-track">
+    <div class="timeline-track" id="timelineTrack">
       {% for step in timeline %}
       <div class="timeline-step {{ step.state }}">
         <div class="timeline-dot"></div>
@@ -332,16 +336,16 @@
   <div class="section-title"><span class="n">04</span> AI Analysis</div>
   <div class="glass ai-card fade-in">
     <div class="ai-summary">
-      <b>{{ featured.name }}</b>에 대한 종합 판단은 <b>{{ featured.signal }}</b> (종합점수 {{ featured.final_score }})입니다.
+      <b id="aiSummaryName">{{ featured.name }}</b>에 대한 종합 판단은 <b id="aiSummarySignal">{{ featured.signal }}</b> (종합점수 <span id="aiSummaryScore">{{ featured.final_score }}</span>)입니다.
       {% set reasons = featured.reasons_json | from_json %}
-      {% for r in reasons[:3] %}{{ r }}. {% endfor %}
+      <span id="aiSummaryReasons">{% for r in reasons[:3] %}{{ r }}. {% endfor %}</span>
     </div>
     <div class="ai-metrics">
-      <div class="ai-metric"><div class="k">시장온도</div><div class="v">{{ featured.market_temperature if featured.market_temperature is not none else '—' }}</div></div>
-      <div class="ai-metric"><div class="k">RSI</div><div class="v">{{ featured.rsi if featured.rsi is not none else '—' }}</div></div>
-      <div class="ai-metric"><div class="k">추세</div><div class="v" style="font-size:12px">{{ featured.trend_alignment or '—' }}</div></div>
-      <div class="ai-metric"><div class="k">{{ stop_label }}</div><div class="v">{{ disp_stop|price }}</div></div>
-      <div class="ai-metric"><div class="k">{{ target_label }}</div><div class="v">{{ disp_target|price }}</div></div>
+      <div class="ai-metric"><div class="k">시장온도</div><div class="v" id="aiMetricTemp">{{ featured.market_temperature if featured.market_temperature is not none else '—' }}</div></div>
+      <div class="ai-metric"><div class="k">RSI</div><div class="v" id="aiMetricRsi">{{ featured.rsi if featured.rsi is not none else '—' }}</div></div>
+      <div class="ai-metric"><div class="k">추세</div><div class="v" id="aiMetricTrend" style="font-size:12px">{{ featured.trend_alignment or '—' }}</div></div>
+      <div class="ai-metric"><div class="k" id="aiMetricStopLabel">{{ stop_label }}</div><div class="v" id="aiMetricStopValue">{{ disp_stop|price }}</div></div>
+      <div class="ai-metric"><div class="k" id="aiMetricTargetLabel">{{ target_label }}</div><div class="v" id="aiMetricTargetValue">{{ disp_target|price }}</div></div>
     </div>
   </div>
   {% endif %}
@@ -477,6 +481,134 @@ function openYoutubeModal(e) {
 function closeYoutubeModal() {
   document.getElementById('youtubeModal').classList.remove('open');
   document.getElementById('youtubeModalFrame').src = '';
+}
+
+// 분석 피드 항목 클릭 시, 아래 Timing Analysis / Signal Timeline / AI Analysis 패널을
+// 해당 항목의 분석 결과로 갱신합니다 (서버 재요청 없이 피드에 이미 담긴 데이터로 갱신).
+function formatPriceJs(value) {
+  if (value === null || value === undefined) return '—';
+  value = Number(value);
+  if (Number.isNaN(value)) return '—';
+  if (Math.abs(value) >= 1) return value.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  if (value === 0) return '0';
+  let s = value.toFixed(8);
+  s = s.replace(/0+$/, '').replace(/\.$/, '');
+  return s;
+}
+
+function normalPdf(x) { return Math.exp(-(x * x) / 2) / Math.sqrt(2 * Math.PI); }
+
+function bellMarkerPos(zScore) {
+  const xMin = -3.6, xMax = 3.6, width = 520, height = 160, pad = 10;
+  const maxY = normalPdf(0);
+  const z = Math.max(xMin, Math.min(xMax, zScore === null || zScore === undefined ? 0 : zScore));
+  const mx = pad + (z - xMin) / (xMax - xMin) * (width - 2 * pad);
+  const my = height - pad - (normalPdf(z) / maxY) * (height - 2 * pad);
+  return [mx, my];
+}
+
+function mbPdf(x, a) { return (x * x) * Math.exp(-(x * x) / (2 * a * a)); }
+
+function mbMarkerPos(percentile) {
+  const xMin = 0, xMax = 5, width = 520, height = 160, pad = 10, a = 1.4;
+  const xPeak = a * Math.sqrt(2);
+  const maxY = mbPdf(xPeak, a);
+  const pct = percentile === null || percentile === undefined ? 50 : percentile;
+  const xVal = xMin + (xMax - xMin) * (pct / 100);
+  const mx = pad + (xVal - xMin) / (xMax - xMin) * (width - 2 * pad);
+  const my = height - pad - (mbPdf(xVal, a) / maxY) * (height - 2 * pad);
+  return [mx, my];
+}
+
+function selectFeedSignal(el) {
+  let s;
+  try {
+    s = JSON.parse(el.dataset.signal);
+  } catch (e) {
+    return;
+  }
+
+  document.querySelectorAll('.feed-item.selected').forEach(x => x.classList.remove('selected'));
+  el.classList.add('selected');
+
+  // 이 대시보드에 아직 Timing Analysis 패널이 없다면(관심종목 미등록 등) 여기서 중단
+  if (!document.getElementById('timingTitle')) return;
+
+  document.getElementById('timingTitle').textContent = `${s.name} (${s.code})`;
+
+  const [bx, by] = bellMarkerPos(s.z_score);
+  document.getElementById('bellMarker').setAttribute('cx', bx.toFixed(1));
+  document.getElementById('bellMarker').setAttribute('cy', by.toFixed(1));
+  document.getElementById('zSubLabel').textContent = s.z_score === null || s.z_score === undefined ? '—' : s.z_score;
+
+  let mbPct = 50;
+  if (s.volume_ratio !== null && s.volume_ratio !== undefined) {
+    mbPct = Math.max(0, Math.min(100, 50 + (s.volume_ratio - 1) * 40));
+  }
+  const [mx, my] = mbMarkerPos(mbPct);
+  document.getElementById('mbMarker').setAttribute('cx', mx.toFixed(1));
+  document.getElementById('mbMarker').setAttribute('cy', my.toFixed(1));
+  document.getElementById('mbSubLabel').textContent = s.volume_ratio === null || s.volume_ratio === undefined ? '—' : s.volume_ratio;
+
+  const sigLower = (s.signal || '').toLowerCase();
+  const badge = document.getElementById('recBadge');
+  badge.textContent = s.signal;
+  badge.className = 'rec-badge ' + sigLower;
+
+  const finalScore = s.final_score || 0;
+  document.getElementById('confidenceValue').textContent = (Math.abs(finalScore) * 100).toFixed(1) + '%';
+  document.getElementById('confidenceBarInner').style.width = Math.round(Math.abs(finalScore) * 100) + '%';
+  document.getElementById('currentPriceValue').textContent = formatPriceJs(s.current_price) + '원';
+
+  // 손절가/목표가 표시 규칙: SELL은 현재가 기준 대칭 반전, HOLD는 예상 상/하단, 그 외는 그대로
+  let dispTarget = null, dispStop = null, targetLabel = '목표가', stopLabel = '손절가';
+  if (s.target_price !== null && s.target_price !== undefined && s.stop_loss !== null && s.stop_loss !== undefined) {
+    const price = s.current_price || 0;
+    if (s.signal === 'SELL') {
+      dispTarget = 2 * price - s.target_price;
+      dispStop = 2 * price - s.stop_loss;
+      targetLabel = '하락 목표가'; stopLabel = '반등 손절가';
+    } else if (s.signal === 'HOLD') {
+      dispTarget = s.target_price; dispStop = s.stop_loss;
+      targetLabel = '예상 상단'; stopLabel = '예상 하단';
+    } else {
+      dispTarget = s.target_price; dispStop = s.stop_loss;
+      targetLabel = '목표가'; stopLabel = '손절가';
+    }
+  }
+  document.getElementById('targetLabel').textContent = targetLabel;
+  document.getElementById('targetValue').textContent = formatPriceJs(dispTarget) + '원';
+  document.getElementById('stopLabel').textContent = stopLabel;
+  document.getElementById('stopValue').textContent = formatPriceJs(dispStop) + '원';
+
+  const steps = [
+    { label: '시가 형성', detail: formatPriceJs(s.current_price) + '원', state: 'done' },
+    { label: '확률 신호 감지', detail: (s.z_score !== null && s.z_score !== undefined) ? `z=${s.z_score}` : '데이터 없음', state: (s.z_score !== null && s.z_score !== undefined) ? 'done' : 'pending' },
+    { label: '거래 에너지 확인', detail: (s.volume_ratio !== null && s.volume_ratio !== undefined) ? `평균 대비 ${s.volume_ratio}배` : '데이터 없음', state: (s.volume_ratio !== null && s.volume_ratio !== undefined) ? 'done' : 'pending' },
+    { label: '추세 확인', detail: s.trend_alignment || '데이터 없음', state: s.trend_alignment ? 'done' : 'pending' },
+    { label: `최종 판단: ${s.signal}`, detail: `종합점수 ${s.final_score}`, state: 'current' },
+  ];
+  const stepEls = document.querySelectorAll('#timelineTrack .timeline-step');
+  steps.forEach((st, i) => {
+    if (!stepEls[i]) return;
+    stepEls[i].className = 'timeline-step ' + st.state;
+    stepEls[i].querySelector('.t-label').textContent = st.label;
+    stepEls[i].querySelector('.t-detail').textContent = st.detail;
+  });
+
+  let reasons = [];
+  try { reasons = JSON.parse(s.reasons_json || '[]'); } catch (e) {}
+  document.getElementById('aiSummaryName').textContent = s.name;
+  document.getElementById('aiSummarySignal').textContent = s.signal;
+  document.getElementById('aiSummaryScore').textContent = s.final_score;
+  document.getElementById('aiSummaryReasons').textContent = reasons.slice(0, 3).map(r => r + '. ').join('');
+  document.getElementById('aiMetricTemp').textContent = (s.market_temperature === null || s.market_temperature === undefined) ? '—' : s.market_temperature;
+  document.getElementById('aiMetricRsi').textContent = (s.rsi === null || s.rsi === undefined) ? '—' : s.rsi;
+  document.getElementById('aiMetricTrend').textContent = s.trend_alignment || '—';
+  document.getElementById('aiMetricStopLabel').textContent = stopLabel;
+  document.getElementById('aiMetricStopValue').textContent = formatPriceJs(dispStop);
+  document.getElementById('aiMetricTargetLabel').textContent = targetLabel;
+  document.getElementById('aiMetricTargetValue').textContent = formatPriceJs(dispTarget);
 }
 
 function toggleFeedHistory() {
