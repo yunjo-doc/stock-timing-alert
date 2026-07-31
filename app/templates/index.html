@@ -6,6 +6,36 @@
 <title>AlphaTiming — 투자 타이밍 알리미</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
+.yt-guide-link {
+  display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+  color: var(--muted); font-size: 12px; font-family: var(--font-mono);
+  padding: 3px 8px 3px 3px; border-radius: 999px; border: 1px solid var(--line);
+  transition: border-color .15s, color .15s;
+}
+.yt-guide-link:hover { border-color: var(--danger); color: var(--text); }
+.yt-guide-link svg { width: 18px; height: 18px; flex-shrink: 0; }
+@media (max-width: 640px) { .yt-guide-link .yt-guide-label { display: none; } }
+
+.yt-modal {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(6,19,26,0.78); align-items: center; justify-content: center; padding: 20px;
+}
+.yt-modal.open { display: flex; }
+.yt-modal-inner {
+  position: relative; width: 100%; max-width: 380px;
+}
+.yt-modal-close {
+  position: absolute; top: -38px; right: 0; background: transparent; border: none;
+  color: #fff; font-size: 28px; line-height: 1; cursor: pointer; padding: 4px 8px;
+}
+.yt-modal-frame {
+  position: relative; width: 100%; aspect-ratio: 9 / 16; background: #000;
+  border-radius: var(--radius-sm); overflow: hidden;
+}
+.yt-modal-frame iframe {
+  position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
+}
+
 .hero-band {
   display: flex; flex-direction: column; gap: 14px; padding: 26px 4px 30px;
 }
@@ -69,6 +99,13 @@
     <span class="dot"></span>
     <h1>AlphaTiming</h1>
     <span class="sub">확률분포 · 시장온도 · 추세 · 펀더멘털 · 리스크</span>
+    <a href="#" class="yt-guide-link" onclick="openYoutubeModal(event)" title="맥스웰분포, 정규분포 가이드 영상 보기">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1" y="4" width="22" height="16" rx="5" fill="#FF0000"/>
+        <path d="M10 8.5L16 12L10 15.5V8.5Z" fill="#fff"/>
+      </svg>
+      <span class="yt-guide-label">맥스웰분포, 정규분포</span>
+    </a>
   </div>
   <button class="nav-toggle" onclick="this.nextElementSibling.classList.toggle('open')">☰</button>
   <nav>
@@ -82,6 +119,17 @@
     <a href="/login">로그인</a>
     {% endif %}
   </nav>
+</div>
+
+<div id="youtubeModal" class="yt-modal" onclick="if (event.target === this) closeYoutubeModal();">
+  <div class="yt-modal-inner">
+    <button type="button" class="yt-modal-close" onclick="closeYoutubeModal()">&times;</button>
+    <div class="yt-modal-frame">
+      <iframe id="youtubeModalFrame" src="" title="맥스웰분포, 정규분포 가이드"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen></iframe>
+    </div>
+  </div>
 </div>
 
 <div class="wrap">
@@ -415,6 +463,20 @@ function pollForCompletion(requestedAt, btn, status) {
       btn.disabled = false; btn.classList.remove('loading');
     }
   }, 3000);
+}
+
+const YT_GUIDE_VIDEO_ID = '1b9Ht2upBIQ';
+
+function openYoutubeModal(e) {
+  if (e) e.preventDefault();
+  document.getElementById('youtubeModalFrame').src =
+    `https://www.youtube-nocookie.com/embed/${YT_GUIDE_VIDEO_ID}?autoplay=1&rel=0`;
+  document.getElementById('youtubeModal').classList.add('open');
+}
+
+function closeYoutubeModal() {
+  document.getElementById('youtubeModal').classList.remove('open');
+  document.getElementById('youtubeModalFrame').src = '';
 }
 
 function toggleFeedHistory() {
