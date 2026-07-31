@@ -8,6 +8,7 @@ from .data_source import naver, upbit
 from .analysis.signal_engine import analyze_stock
 from .notify import kakao
 from . import db
+from . import dashboard_utils as du
 from .billing import toss as toss_client
 from .billing.plans import get_plan
 
@@ -49,8 +50,10 @@ def _analyze_market(cfg: dict, market: str):
         prev_signal = prev["signal"] if prev else None
         curr_signal = result["signal"]
 
-        if curr_signal in ("BUY", "SELL") and curr_signal != prev_signal:
-            message = _build_message(result)
+        # BUY<->SELL 전환일 때만 알림 (HOLD를 거치는 변화나 최초 신호는 제외해
+        # 실제로 방향이 뒤집힌, 행동이 필요한 순간에만 카카오톡이 오도록 합니다)
+        if prev_signal in ("BUY", "SELL") and curr_signal in ("BUY", "SELL") and curr_signal != prev_signal:
+            message = _build_message(result, prev_signal)
             kakao.notify_all_connected_users(code, message, cfg)
 
         db.upsert_last_signal(code, curr_signal, result.get("final_score", 0))
@@ -114,16 +117,23 @@ def run_billing_cycle():
             print(f"[정기결제 완료] user_id={sub['user_id']} plan={sub['plan']}")
 
 
-def _build_message(result: dict) -> str:
-    signal_kr = {"BUY": "매수", "SELL": "매도"}.get(result["signal"], result["signal"])
+def _build_message(result: dict, prev_signal: str) -> str:
+    """카카오 '나에게 보내기'는 텍스트 200자 제한이 있어서, 전환 여부를 바로 알 수 있는
+    핵심 정보(전환 방향/현재가/손절·목표가/핵심 근거 1줄)만 담습니다. 상세 근거와 전체
+    분석은 앱 대시보드에서 확인하도록 안내합니다."""
+    signal_kr = {"BUY": "매수", "SELL": "매도"}
     lines = [
-        f"[{signal_kr} 신호] {result['name']} ({result['code']})",
-        f"현재가: {result.get('current_price')}원 / 종합점수: {result.get('final_score')}",
+        f"[전환] {result['name']}({result['code']}) {signal_kr[prev_signal]}→{signal_kr[result['signal']]}",
+        f"현재가 {du.format_price(result.get('current_price'))}원 · 종합점수 {result.get('final_score')}",
     ]
     risk_detail = result.get("components", {}).get("risk", {}).get("detail", {})
     if risk_detail:
-        lines.append(f"손절가: {risk_detail.get('stop_loss')} / 목표가: {risk_detail.get('target_price')}")
-    lines.append("--- 근거 ---")
-    lines.extend(result.get("reasons", [])[:3])
-    lines.append("\n(테스트 버전 신호이며, 투자 판단과 책임은 본인에게 있습니다.)")
+        lines.append(
+            f"손절 {du.format_price(risk_detail.get('stop_loss'))} "
+            f"/ 목표 {du.format_price(risk_detail.get('target_price'))}"
+        )
+    reasons = result.get("reasons", [])
+    if reasons:
+        lines.append(f"[근거] {reasons[0]}")
+    lines.append("자세히 보기: AlphaTiming 앱")
     return "\n".join(lines)
