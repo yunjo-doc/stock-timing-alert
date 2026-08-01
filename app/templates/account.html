@@ -55,7 +55,9 @@
 
   <div class="glass panel fade-in">
     <div style="font-size:13px; color:var(--muted); margin-bottom:4px;">이메일</div>
-    <div style="font-size:15px; font-weight:600; margin-bottom:22px;">{{ user.email }}</div>
+    <div style="font-size:15px; font-weight:600; margin-bottom:22px;">
+      {{ '카카오 계정으로 로그인' if user.kakao_id else user.email }}
+    </div>
 
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
       <div style="font-size:14px; font-weight:600;">구독 플랜</div>
