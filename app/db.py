@@ -124,6 +124,13 @@ def init_db():
                 created_at TEXT NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS market_snapshot (
+                key TEXT PRIMARY KEY,
+                data_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
         conn.commit()
 
     with get_conn() as conn:
@@ -650,3 +657,26 @@ def get_all_members_for_admin():
             "watchlist_count": len(wl),
         })
     return members
+
+
+# ----------------------------------------------------------------------
+# 대시보드 히어로 카드용 시장 지수 스냅샷 (하루 2회, 오전/오후 갱신)
+# ----------------------------------------------------------------------
+def save_market_snapshot(key: str, data: dict):
+    import json as _json
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO market_snapshot (key, data_json, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET data_json=excluded.data_json, updated_at=excluded.updated_at",
+            (key, _json.dumps(data, ensure_ascii=False), datetime.now().isoformat()),
+        )
+        conn.commit()
+
+
+def get_market_snapshot(key: str):
+    import json as _json
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM market_snapshot WHERE key=?", (key,)).fetchone()
+        if not row:
+            return None
+        return {"data": _json.loads(row["data_json"]), "updated_at": row["updated_at"]}

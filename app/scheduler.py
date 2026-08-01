@@ -16,6 +16,25 @@ from .billing.plans import get_plan
 DATA_SOURCES = {"stock": naver, "crypto": upbit}
 
 
+def refresh_market_snapshot(cfg: dict = None):
+    """대시보드 히어로 카드(증권/가상자산 탭)에 쓰는 KOSPI·KOSDAQ 지수와 BTC·ETH 참고가를
+    하루 2회(오전/오후)만 갱신해서 DB에 저장합니다. 방문할 때마다 값이 바뀌어 보이지
+    않도록, 대시보드는 이 스냅샷만 읽고 외부 API를 직접 호출하지 않습니다."""
+    try:
+        indices = naver.get_market_indices()
+        if indices:
+            db.save_market_snapshot("kospi_kosdaq", indices)
+    except Exception as e:
+        print(f"[시장 지수 스냅샷 오류] {e}")
+
+    try:
+        usd_prices = upbit.get_usd_reference_prices()
+        if usd_prices:
+            db.save_market_snapshot("usd_crypto", usd_prices)
+    except Exception as e:
+        print(f"[USD 참고시세 스냅샷 오류] {e}")
+
+
 def _build_analysis_universe(cfg: dict, market: str):
     """분석 대상 = (증권일 때만) 관리자 기본 종목(config.json) + 모든 회원의 해당 market
     관심종목 합집합 (코드 기준 중복 제거)"""

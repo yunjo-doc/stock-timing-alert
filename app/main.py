@@ -53,7 +53,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from .config import load_config, save_config, BASE_DIR
-from .scheduler import run_analysis_cycle, run_billing_cycle
+from .scheduler import run_analysis_cycle, run_billing_cycle, refresh_market_snapshot
 from . import db
 from . import dashboard_utils as du
 from . import auth
@@ -102,8 +102,14 @@ def on_startup():
                         minutes=interval, id="analysis_cycle", replace_existing=True)
     _scheduler.add_job(run_billing_cycle, "interval",
                         hours=24, id="billing_cycle", replace_existing=True)
+    # 히어로 카드의 지수/시세는 방문할 때마다 값이 바뀌어 보이지 않도록 하루 2회(오전 9시,
+    # 오후 3시, KST)만 갱신합니다. 서버가 막 켜졌을 때 카드가 비어있지 않도록 시작 시 1회 즉시 실행.
+    _scheduler.add_job(refresh_market_snapshot, "cron", hour="9,15", minute=0,
+                        timezone="Asia/Seoul", id="market_snapshot", replace_existing=True)
     _scheduler.start()
-    print(f"[스케줄러 시작] {interval}분 주기로 자동 분석을, 24시간 주기로 정기결제를 실행합니다.")
+    refresh_market_snapshot()
+    print(f"[스케줄러 시작] {interval}분 주기로 자동 분석을, 24시간 주기로 정기결제를, "
+          f"매일 09시/15시(KST)에 시장 지수 스냅샷을 갱신합니다.")
 
 
 @app.on_event("shutdown")
@@ -157,6 +163,13 @@ def dashboard(request: Request, market: str = "stock"):
     recent_alerts = db.get_recent_notifications(6, codes=my_codes)
     analysis_feed = db.get_recent_signals_for_codes(list(my_codes), limit=30)
 
+    # 히어로 카드(증권/가상자산 선택 탭)에 표시할 대표 지수/시세. 방문할 때마다 값이
+    # 바뀌지 않도록 실시간 조회가 아니라, 스케줄러가 하루 2회 갱신해둔 스냅샷을 읽습니다.
+    kospi_kosdaq_snapshot = db.get_market_snapshot("kospi_kosdaq")
+    usd_crypto_snapshot = db.get_market_snapshot("usd_crypto")
+    market_indices = kospi_kosdaq_snapshot["data"] if kospi_kosdaq_snapshot else None
+    usd_prices = usd_crypto_snapshot["data"] if usd_crypto_snapshot else None
+
     return templates.TemplateResponse(request, "index.html", {
         "signals": signals,
         "summary": summary,
@@ -166,6 +179,8 @@ def dashboard(request: Request, market: str = "stock"):
         "mb": mb,
         "recent_alerts": recent_alerts,
         "analysis_feed": analysis_feed,
+        "market_indices": market_indices,
+        "usd_prices": usd_prices,
         "watch_count": watch_count,
         "interval": cfg["schedule"]["interval_minutes"],
         "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

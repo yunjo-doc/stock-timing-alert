@@ -20,6 +20,12 @@ HEADERS = {"Accept": "application/json"}
 _market_cache = {"data": None, "fetched_at": 0}
 _MARKET_CACHE_TTL_SEC = 300  # 전체 마켓 목록은 자주 안 바뀌므로 5분 캐시
 
+# 업비트는 원화(KRW) 마켓만 취급하므로, 대시보드 히어로 카드에 쓸 달러(USD) 기준 시세는
+# 별도로 CoinGecko 공개 API(무료, 키 불필요)에서 가져옵니다.
+COINGECKO_PRICE_URL = "https://api.coingecko.com/api/v3/simple/price"
+_usd_price_cache = {"data": None, "fetched_at": 0}
+_USD_PRICE_CACHE_TTL_SEC = 300
+
 
 def get_daily_ohlcv(code: str, lookback_days: int = 120):
     """
@@ -81,6 +87,33 @@ def _get_all_markets_cached():
     _market_cache["data"] = markets
     _market_cache["fetched_at"] = now
     return markets
+
+
+def get_usd_reference_prices():
+    """대시보드 히어로 카드용 BTC-USD/ETH-USD 참고 시세. 5분 캐시, 실패 시 이전 값 유지."""
+    now = time.time()
+    if _usd_price_cache["data"] is not None and now - _usd_price_cache["fetched_at"] < _USD_PRICE_CACHE_TTL_SEC:
+        return _usd_price_cache["data"]
+
+    try:
+        resp = requests.get(
+            COINGECKO_PRICE_URL,
+            params={"ids": "bitcoin,ethereum", "vs_currencies": "usd", "include_24hr_change": "true"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except requests.RequestException as e:
+        print(f"[USD 참고시세 오류] {e}")
+        return _usd_price_cache["data"]
+
+    result = {
+        "BTC": {"value": data.get("bitcoin", {}).get("usd"), "change_pct": data.get("bitcoin", {}).get("usd_24h_change")},
+        "ETH": {"value": data.get("ethereum", {}).get("usd"), "change_pct": data.get("ethereum", {}).get("usd_24h_change")},
+    }
+    _usd_price_cache["data"] = result
+    _usd_price_cache["fetched_at"] = now
+    return result
 
 
 def search_stocks(query: str, limit: int = 15):

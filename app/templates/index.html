@@ -85,15 +85,29 @@
 }
 .feed-toggle:hover { background: var(--overlay-strong); }
 
-.market-tabs { display: flex; gap: 10px; margin-bottom: 4px; }
-.market-tab {
-  display: inline-flex; align-items: center; justify-content: center;
-  padding: 9px 22px; border-radius: 999px; font-size: 14px; font-weight: 700;
-  text-decoration: none; border: 2px solid var(--line-strong); color: var(--muted);
-  background: var(--card-solid); transition: all 0.15s ease;
+.market-card-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 4px; }
+@media (max-width: 640px) { .market-card-tabs { grid-template-columns: 1fr; } }
+.market-card-tab {
+  display: flex; align-items: center; gap: 14px; text-align: left;
+  padding: 18px 20px; border-radius: var(--radius-lg); text-decoration: none;
+  border: 2px solid var(--line-strong); background: var(--card-solid); transition: all 0.15s ease;
 }
-.market-tab:hover { border-color: var(--secondary); color: var(--secondary); }
-.market-tab.active { border-color: var(--secondary); color: var(--secondary); background: var(--secondary-dim); }
+.market-card-tab:hover { border-color: var(--secondary); }
+.market-card-tab.active { border-color: var(--secondary); background: var(--secondary-dim); }
+.mct-icon {
+  flex-shrink: 0; width: 44px; height: 44px; border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center; font-size: 22px;
+  background: var(--secondary-dim);
+}
+.market-card-tab.crypto .mct-icon { background: var(--warning-dim); }
+.mct-body { min-width: 0; flex: 1; }
+.mct-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.mct-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; margin-bottom: 8px; }
+.mct-stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.mct-stats b { color: var(--text); font-weight: 600; }
+.mct-stats .up { color: var(--accent); }
+.mct-stats .down { color: var(--danger); }
+.mct-stats .na { color: var(--muted-2); }
 </style>
 </head>
 <body>
@@ -139,9 +153,47 @@
 <div class="wrap">
   <div class="hero-band fade-in">
     <h2>AI 기반 투자 타이밍 분석</h2>
-    <div class="market-tabs">
-      <a href="/?market=stock" class="market-tab {{ 'active' if market == 'stock' else '' }}">증권</a>
-      <a href="/?market=crypto" class="market-tab {{ 'active' if market == 'crypto' else '' }}">가상자산</a>
+    <div class="market-card-tabs">
+      <a href="/?market=stock" class="market-card-tab {{ 'active' if market == 'stock' else '' }}">
+        <div class="mct-icon">📈</div>
+        <div class="mct-body">
+          <div class="mct-title">증권 분석</div>
+          <div class="mct-sub">주요 주가 지수</div>
+          <div class="mct-stats">
+            {% if market_indices and market_indices.KOSPI %}
+            <span>KOSPI <b>{{ '{:,.2f}'.format(market_indices.KOSPI.value) }}</b>
+              <span class="{{ 'up' if market_indices.KOSPI.up else 'down' }}">{{ '▲' if market_indices.KOSPI.up else '▼' }}{{ '%.2f'|format(market_indices.KOSPI.change_pct) }}%</span>
+            </span>
+            {% endif %}
+            {% if market_indices and market_indices.KOSDAQ %}
+            <span>KOSDAQ <b>{{ '{:,.2f}'.format(market_indices.KOSDAQ.value) }}</b>
+              <span class="{{ 'up' if market_indices.KOSDAQ.up else 'down' }}">{{ '▲' if market_indices.KOSDAQ.up else '▼' }}{{ '%.2f'|format(market_indices.KOSDAQ.change_pct) }}%</span>
+            </span>
+            {% endif %}
+            {% if not market_indices %}<span class="na">지수 정보 준비 중</span>{% endif %}
+          </div>
+        </div>
+      </a>
+      <a href="/?market=crypto" class="market-card-tab crypto {{ 'active' if market == 'crypto' else '' }}">
+        <div class="mct-icon">🪙</div>
+        <div class="mct-body">
+          <div class="mct-title">가상자산 분석</div>
+          <div class="mct-sub">주요 크립토 가격</div>
+          <div class="mct-stats">
+            {% if usd_prices and usd_prices.BTC and usd_prices.BTC.value is not none %}
+            <span>BTC/USD <b>{{ '{:,.0f}'.format(usd_prices.BTC.value) }}</b>
+              <span class="{{ 'up' if usd_prices.BTC.change_pct >= 0 else 'down' }}">{{ '▲' if usd_prices.BTC.change_pct >= 0 else '▼' }}{{ '%.2f'|format(usd_prices.BTC.change_pct) }}%</span>
+            </span>
+            {% endif %}
+            {% if usd_prices and usd_prices.ETH and usd_prices.ETH.value is not none %}
+            <span>ETH/USD <b>{{ '{:,.0f}'.format(usd_prices.ETH.value) }}</b>
+              <span class="{{ 'up' if usd_prices.ETH.change_pct >= 0 else 'down' }}">{{ '▲' if usd_prices.ETH.change_pct >= 0 else '▼' }}{{ '%.2f'|format(usd_prices.ETH.change_pct) }}%</span>
+            </span>
+            {% endif %}
+            {% if not usd_prices %}<span class="na">시세 정보 준비 중</span>{% endif %}
+          </div>
+        </div>
+      </a>
     </div>
     <p>
       데이터 기반 AI가 확률분포·시장온도·추세·펀더멘털·리스크를 종합해

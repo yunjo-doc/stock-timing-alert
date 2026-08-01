@@ -30,6 +30,9 @@ HEADERS = {
 
 REQUEST_DELAY_SEC = 0.4  # 네이버 서버 부담을 줄이기 위한 최소 대기시간
 
+_index_cache = {"data": None, "fetched_at": 0}
+_INDEX_CACHE_TTL_SEC = 300  # 대시보드 히어로 카드용 지수는 5분 캐시로 충분
+
 
 def _get(url: str) -> str:
     resp = requests.get(url, headers=HEADERS, timeout=10)
@@ -175,6 +178,44 @@ def _extract_roe(html: str) -> float:
     # ROE는 페이지 하단 '기업실적분석' 표에 있어 파싱이 더 어려움 - 우선 0 처리,
     # 필요 시 별도 API(예: 공공데이터포털 기업 재무정보)로 보강 권장
     return 0.0
+
+
+def _parse_index_page(html: str):
+    value_match = re.search(r'id="now_value">([\d,\.]+)</em>', html)
+    change_match = re.search(
+        r'id="change_value_and_rate"><span>([\d,\.]+)</span>\s*([+\-][\d\.]+)%.*?class="blind">(상승|하락|보합)',
+        html, re.DOTALL,
+    )
+    if not value_match:
+        return None
+    return {
+        "value": float(value_match.group(1).replace(",", "")),
+        "change_pct": float(change_match.group(2)) if change_match else 0.0,
+        "up": change_match.group(3) != "하락" if change_match else True,
+    }
+
+
+def get_market_indices():
+    """대시보드 히어로 카드용 KOSPI/KOSDAQ 지수. 5분 캐시, 실패 시 이전 값(또는 None) 유지."""
+    now = time.time()
+    if _index_cache["data"] is not None and now - _index_cache["fetched_at"] < _INDEX_CACHE_TTL_SEC:
+        return _index_cache["data"]
+
+    result = {}
+    for name, code in (("KOSPI", "KOSPI"), ("KOSDAQ", "KOSDAQ")):
+        try:
+            html = _get(f"https://finance.naver.com/sise/sise_index.naver?code={code}")
+            parsed = _parse_index_page(html)
+            if parsed:
+                result[name] = parsed
+        except requests.RequestException as e:
+            print(f"[네이버 지수 오류] {name}: {e}")
+
+    if result:
+        _index_cache["data"] = result
+        _index_cache["fetched_at"] = now
+        return result
+    return _index_cache["data"]
 
 
 def _extract_market_cap(html: str) -> float:
