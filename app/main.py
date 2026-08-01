@@ -133,6 +133,17 @@ def _next_analysis_run_iso():
     return None
 
 
+def _market_snapshot_context():
+    """히어로 카드(증권/가상자산 선택 탭)에 표시할 대표 지수/시세. 방문할 때마다 값이
+    바뀌지 않도록 실시간 조회가 아니라, 스케줄러가 하루 2회 갱신해둔 스냅샷을 읽습니다."""
+    kospi_kosdaq_snapshot = db.get_market_snapshot("kospi_kosdaq")
+    usd_crypto_snapshot = db.get_market_snapshot("usd_crypto")
+    return {
+        "market_indices": kospi_kosdaq_snapshot["data"] if kospi_kosdaq_snapshot else None,
+        "usd_prices": usd_crypto_snapshot["data"] if usd_crypto_snapshot else None,
+    }
+
+
 # ----------------------------------------------------------------------
 # 대시보드
 # ----------------------------------------------------------------------
@@ -163,13 +174,6 @@ def dashboard(request: Request, market: str = "stock"):
     recent_alerts = db.get_recent_notifications(6, codes=my_codes)
     analysis_feed = db.get_recent_signals_for_codes(list(my_codes), limit=30)
 
-    # 히어로 카드(증권/가상자산 선택 탭)에 표시할 대표 지수/시세. 방문할 때마다 값이
-    # 바뀌지 않도록 실시간 조회가 아니라, 스케줄러가 하루 2회 갱신해둔 스냅샷을 읽습니다.
-    kospi_kosdaq_snapshot = db.get_market_snapshot("kospi_kosdaq")
-    usd_crypto_snapshot = db.get_market_snapshot("usd_crypto")
-    market_indices = kospi_kosdaq_snapshot["data"] if kospi_kosdaq_snapshot else None
-    usd_prices = usd_crypto_snapshot["data"] if usd_crypto_snapshot else None
-
     return templates.TemplateResponse(request, "index.html", {
         "signals": signals,
         "summary": summary,
@@ -179,8 +183,8 @@ def dashboard(request: Request, market: str = "stock"):
         "mb": mb,
         "recent_alerts": recent_alerts,
         "analysis_feed": analysis_feed,
-        "market_indices": market_indices,
-        "usd_prices": usd_prices,
+        **_market_snapshot_context(),
+        "base_url": "/",
         "watch_count": watch_count,
         "interval": cfg["schedule"]["interval_minutes"],
         "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -222,6 +226,8 @@ def watchlist_page(request: Request, error: str = "", market: str = "stock"):
         "user": user,
         "plan": plan,
         "market": market,
+        **_market_snapshot_context(),
+        "base_url": "/watchlist",
         "limit_label": billing_plans.stock_limit_label(plan),
         "at_limit": plan["stock_limit"] is not None and len(watch_list) >= plan["stock_limit"],
         "error": error,

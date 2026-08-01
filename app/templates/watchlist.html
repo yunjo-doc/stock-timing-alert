@@ -53,15 +53,6 @@
 .modal-body input[type=text] { width: 100%; margin-bottom: 10px; }
 #modalResults { position: static; display: block; max-height: 320px; }
 
-.market-tabs { display: flex; gap: 10px; margin-bottom: 16px; }
-.market-tab {
-  display: inline-flex; align-items: center; justify-content: center;
-  padding: 9px 22px; border-radius: 999px; font-size: 14px; font-weight: 700;
-  text-decoration: none; border: 2px solid var(--line-strong); color: var(--muted);
-  background: var(--card-solid); transition: all 0.15s ease;
-}
-.market-tab:hover { border-color: var(--secondary); color: var(--secondary); }
-.market-tab.active { border-color: var(--secondary); color: var(--secondary); background: var(--secondary-dim); }
 </style>
 </head>
 <body>
@@ -90,10 +81,7 @@
     <span class="n">·</span> {{ '관심코인 관리' if market == 'crypto' else '관심종목 관리' }}
   </div>
 
-  <div class="market-tabs">
-    <a href="/watchlist?market=stock" class="market-tab {{ 'active' if market == 'stock' else '' }}">증권</a>
-    <a href="/watchlist?market=crypto" class="market-tab {{ 'active' if market == 'crypto' else '' }}">가상자산</a>
-  </div>
+  {% include "_market_card_tabs.html" with context %}
 
   <div class="meta-row">
     <div class="meta-left">

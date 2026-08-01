@@ -259,3 +259,28 @@ button.danger { background: transparent; color: var(--danger); border: 1px solid
   table { font-size: 12px; }
   th, td { padding: 10px 10px; }
 }
+
+/* 증권/가상자산 선택 카드 (대시보드, Watchlist 등 여러 페이지에서 공용) */
+.market-card-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 4px; }
+@media (max-width: 640px) { .market-card-tabs { grid-template-columns: 1fr; } }
+.market-card-tab {
+  display: flex; align-items: center; gap: 14px; text-align: left;
+  padding: 18px 20px; border-radius: var(--radius-lg); text-decoration: none;
+  border: 2px solid var(--line-strong); background: var(--card-solid); transition: all 0.15s ease;
+}
+.market-card-tab:hover { border-color: var(--secondary); }
+.market-card-tab.active { border-color: var(--secondary); background: var(--secondary-dim); }
+.mct-icon {
+  flex-shrink: 0; width: 44px; height: 44px; border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center; font-size: 22px;
+  background: var(--secondary-dim);
+}
+.market-card-tab.crypto .mct-icon { background: var(--warning-dim); }
+.mct-body { min-width: 0; flex: 1; }
+.mct-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.mct-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; margin-bottom: 8px; }
+.mct-stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.mct-stats b { color: var(--text); font-weight: 600; }
+.mct-stats .up { color: var(--accent); }
+.mct-stats .down { color: var(--danger); }
+.mct-stats .na { color: var(--muted-2); }
