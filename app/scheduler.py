@@ -69,9 +69,10 @@ def _analyze_market(cfg: dict, market: str):
         prev_signal = prev["signal"] if prev else None
         curr_signal = result["signal"]
 
-        # BUY<->SELL 전환일 때만 알림 (HOLD를 거치는 변화나 최초 신호는 제외해
-        # 실제로 방향이 뒤집힌, 행동이 필요한 순간에만 카카오톡이 오도록 합니다)
-        if prev_signal in ("BUY", "SELL") and curr_signal in ("BUY", "SELL") and curr_signal != prev_signal:
+        # 매수/매도 신호로 새로 진입할 때 알림 (HOLD->BUY, HOLD->SELL, BUY->SELL,
+        # SELL->BUY, 그리고 관심종목 등록 후 첫 신호가 BUY/SELL인 경우도 포함).
+        # 반대로 BUY/SELL -> HOLD(관망으로 빠지는 경우)는 알림을 보내지 않습니다.
+        if curr_signal in ("BUY", "SELL") and curr_signal != prev_signal:
             message = _build_message(result, prev_signal)
             kakao.notify_all_connected_users(code, message, cfg)
 
@@ -140,9 +141,10 @@ def _build_message(result: dict, prev_signal: str) -> str:
     """카카오 '나에게 보내기'는 텍스트 200자 제한이 있어서, 전환 여부를 바로 알 수 있는
     핵심 정보(전환 방향/현재가/손절·목표가/핵심 근거 1줄)만 담습니다. 상세 근거와 전체
     분석은 앱 대시보드에서 확인하도록 안내합니다."""
-    signal_kr = {"BUY": "매수", "SELL": "매도"}
+    signal_kr = {"BUY": "매수", "SELL": "매도", "HOLD": "관망"}
+    prev_label = signal_kr.get(prev_signal, "신규")  # 관심종목 등록 후 첫 신호는 이전 신호가 없음
     lines = [
-        f"[전환] {result['name']}({result['code']}) {signal_kr[prev_signal]}→{signal_kr[result['signal']]}",
+        f"[전환] {result['name']}({result['code']}) {prev_label}→{signal_kr[result['signal']]}",
         f"현재가 {du.format_price(result.get('current_price'))}원 · 종합점수 {result.get('final_score')}",
     ]
     risk_detail = result.get("components", {}).get("risk", {}).get("detail", {})
