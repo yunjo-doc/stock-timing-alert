@@ -158,3 +158,54 @@ def _build_message(result: dict, prev_signal: str) -> str:
         lines.append(f"[근거] {reasons[0]}")
     lines.append("자세히 보기: AlphaTiming 앱")
     return "\n".join(lines)
+
+
+def _build_digest_message(rows: list) -> str:
+    """오늘 하루 신호 전환 알림을 한 번도 못 받은(=조용했던) 회원에게 보내는 일일 요약.
+    관심종목이 많으면 목록을 줄이고 '...외 N개'로 표시해 카카오 200자 제한을 지킵니다."""
+    signal_kr = {"BUY": "매수", "SELL": "매도", "HOLD": "관망"}
+    buy = sum(1 for r in rows if r["signal"] == "BUY")
+    sell = sum(1 for r in rows if r["signal"] == "SELL")
+    hold = sum(1 for r in rows if r["signal"] == "HOLD")
+
+    lines = [f"[일일 요약] 관심종목 {len(rows)}개 · 매수{buy} 매도{sell} 관망{hold}"]
+    shown = 0
+    for r in rows:
+        line = f"{r['name']} {signal_kr.get(r['signal'], r['signal'])}"
+        # 남은 줄(footer 포함)까지 감안해 160자 안으로 유지
+        if sum(len(l) + 1 for l in lines) + len(line) > 160:
+            break
+        lines.append(line)
+        shown += 1
+    if shown < len(rows):
+        lines.append(f"...외 {len(rows) - shown}개")
+    lines.append("오늘 신호 변화는 없었어요.")
+    return "\n".join(lines)
+
+
+def send_daily_digest(cfg: dict):
+    """오늘 하루 알림을 한 번도 못 받은(신호 변화가 없어 조용했던) 카카오 연동 회원에게
+    관심종목 현재 상태(HOLD뿐이어도)를 요약해서 보냅니다. 매일 16:00(KST)에 실행됩니다."""
+    users = db.get_all_kakao_connected_users()
+    if not users:
+        return
+
+    signals_by_code = {s["code"]: s for s in db.get_latest_signals_for_dashboard()}
+    sent_count = 0
+    skipped_count = 0
+
+    for user in users:
+        if db.has_notification_today(user["id"]):
+            skipped_count += 1
+            continue
+
+        watchlist = db.get_user_watchlist(user["id"])
+        rows = [signals_by_code[w["code"]] for w in watchlist if w["code"] in signals_by_code]
+        if not rows:
+            continue
+
+        message = _build_digest_message(rows)
+        if kakao.notify_user(user, "DIGEST", message, cfg):
+            sent_count += 1
+
+    print(f"[일일 요약] 대상 {len(users)}명 중 {sent_count}명 발송, {skipped_count}명은 오늘 이미 알림을 받아 제외")

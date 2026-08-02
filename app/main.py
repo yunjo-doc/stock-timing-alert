@@ -53,7 +53,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from .config import load_config, save_config, BASE_DIR
-from .scheduler import run_analysis_cycle, run_billing_cycle, refresh_market_snapshot
+from .scheduler import run_analysis_cycle, run_billing_cycle, refresh_market_snapshot, send_daily_digest
 from . import db
 from . import dashboard_utils as du
 from . import auth
@@ -106,10 +106,14 @@ def on_startup():
     # 오후 3시, KST)만 갱신합니다. 서버가 막 켜졌을 때 카드가 비어있지 않도록 시작 시 1회 즉시 실행.
     _scheduler.add_job(refresh_market_snapshot, "cron", hour="9,15", minute=0,
                         timezone="Asia/Seoul", id="market_snapshot", replace_existing=True)
+    # 오늘 하루 신호 변화가 없어 알림을 한 번도 못 받은 회원에게, 매일 오후 4시(KST)에
+    # 관심종목 현재 상태(HOLD뿐이어도)를 한 번은 요약해서 보내줍니다.
+    _scheduler.add_job(lambda: send_daily_digest(load_config()), "cron", hour=16, minute=0,
+                        timezone="Asia/Seoul", id="daily_digest", replace_existing=True)
     _scheduler.start()
     refresh_market_snapshot()
     print(f"[스케줄러 시작] {interval}분 주기로 자동 분석을, 24시간 주기로 정기결제를, "
-          f"매일 09시/15시(KST)에 시장 지수 스냅샷을 갱신합니다.")
+          f"매일 09시/15시(KST)에 시장 지수 스냅샷을, 매일 16시(KST)에 일일 요약 알림을 갱신/실행합니다.")
 
 
 @app.on_event("shutdown")

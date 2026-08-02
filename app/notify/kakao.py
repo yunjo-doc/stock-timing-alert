@@ -60,11 +60,17 @@ def refresh_kakao_token(rest_api_key: str, refresh_token: str, client_secret: st
     return resp.json()
 
 
+SITE_URL = "https://alphaone.ai.kr"
+
+
 def _send_kakao_memo(access_token: str, text: str) -> bool:
+    # 모든 메시지 종류(전환 알림/일일 요약/테스트)에 공통으로 사이트 링크를 붙여서,
+    # 메시지를 눌렀을 때 바로 alphaone.ai.kr로 들어올 수 있게 합니다.
     template = {
         "object_type": "text",
         "text": text[:200],
-        "link": {"web_url": "https://finance.naver.com", "mobile_web_url": "https://finance.naver.com"},
+        "link": {"web_url": SITE_URL, "mobile_web_url": SITE_URL},
+        "button_title": "AlphaTiming 바로가기",
     }
     resp = requests.post(
         KAKAO_SEND_URL,
@@ -98,8 +104,6 @@ def notify_all_connected_users(code: str, message: str, cfg: dict):
     access_token이 만료된 경우(401) refresh_token으로 한 번 자동 갱신 후 재시도한다.
     연동한 사용자가 한 명도 없으면 콘솔 로그로 대체한다.
     """
-    rest_api_key = cfg.get("kakao", {}).get("rest_api_key")
-    client_secret = cfg.get("kakao", {}).get("client_secret", "")
     users = db.get_all_kakao_connected_users()
 
     if not users:
@@ -109,18 +113,22 @@ def notify_all_connected_users(code: str, message: str, cfg: dict):
 
     any_sent = False
     for user in users:
-        sent = _send_with_refresh(user, message, rest_api_key, client_secret)
-        db.log_notification(code, message, sent, user_id=user["id"])
+        sent = notify_user(user, code, message, cfg)
         any_sent = any_sent or sent
 
     return any_sent
 
 
-def send_test_message(user: dict, cfg: dict) -> bool:
-    """연동 화면에서 '테스트 알림 보내기'로 호출 — 이 사용자 한 명에게만 발송한다."""
+def notify_user(user: dict, code: str, message: str, cfg: dict) -> bool:
+    """특정 회원 한 명에게 메시지를 보내고 결과를 알림 이력에 남긴다 (일일 요약 등에서 사용)."""
     rest_api_key = cfg.get("kakao", {}).get("rest_api_key")
     client_secret = cfg.get("kakao", {}).get("client_secret", "")
-    message = "[AlphaTiming 테스트] 카카오톡 알림 연동이 정상적으로 완료되었습니다."
     sent = _send_with_refresh(user, message, rest_api_key, client_secret)
-    db.log_notification("TEST", message, sent, user_id=user["id"])
+    db.log_notification(code, message, sent, user_id=user["id"])
     return sent
+
+
+def send_test_message(user: dict, cfg: dict) -> bool:
+    """연동 화면에서 '테스트 알림 보내기'로 호출 — 이 사용자 한 명에게만 발송한다."""
+    message = "[AlphaTiming 테스트] 카카오톡 알림 연동이 정상적으로 완료되었습니다."
+    return notify_user(user, "TEST", message, cfg)

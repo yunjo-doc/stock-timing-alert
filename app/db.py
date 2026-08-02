@@ -402,6 +402,18 @@ def get_recent_notifications(limit=30, codes=None):
         return [dict(r) for r in rows]
 
 
+def has_notification_today(user_id: int) -> bool:
+    """이 회원이 오늘(자정 이후) 알림을 한 건이라도 받았는지 여부.
+    일일 요약 알림 대상(오늘 아무 알림도 못 받은 회원)을 고를 때 사용합니다."""
+    today_start = datetime.now().strftime("%Y-%m-%dT00:00:00")
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM notifications WHERE user_id=? AND created_at >= ? LIMIT 1",
+            (user_id, today_start),
+        ).fetchone()
+        return row is not None
+
+
 # ----------------------------------------------------------------------
 # 사용자별 관심종목 (증권 stock / 가상자산 crypto, 플랜별 개수 제한은 market별 독립 적용)
 # ----------------------------------------------------------------------
@@ -621,11 +633,21 @@ def get_last_signal_dates_for_codes(codes: list):
         return {r["code"]: {"last_buy": r["last_buy"], "last_sell": r["last_sell"]} for r in rows}
 
 
+def get_notifications_for_user(user_id: int, limit: int = 20):
+    """관리자 화면에서 회원별 카카오 알림 발송 이력을 보여줄 때 사용합니다."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
 def get_all_members_for_admin():
     """회원별 이름/전화번호/이메일/가입일/구독플랜/관심종목/종목별 매수·매도 제안일을 모아서 반환"""
     with get_conn() as conn:
         users = [dict(r) for r in conn.execute(
-            "SELECT id, email, name, phone, is_active, created_at FROM users ORDER BY id DESC"
+            "SELECT id, email, name, phone, is_active, created_at, kakao_access_token FROM users ORDER BY id DESC"
         ).fetchall()]
 
     all_codes = set()
@@ -644,6 +666,7 @@ def get_all_members_for_admin():
         wl = watchlist_by_user[u["id"]]
         for s in wl:
             s.update(signal_dates.get(s["code"], {"last_buy": None, "last_sell": None}))
+        notifications = get_notifications_for_user(u["id"], limit=20)
         members.append({
             "id": u["id"],
             "email": u["email"],
@@ -655,6 +678,9 @@ def get_all_members_for_admin():
             "subscription": sub,
             "watchlist": wl,
             "watchlist_count": len(wl),
+            "kakao_connected": bool(u.get("kakao_access_token")),
+            "notifications": notifications,
+            "notification_count": len(notifications),
         })
     return members
 

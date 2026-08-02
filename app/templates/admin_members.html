@@ -82,7 +82,7 @@
       <thead>
         <tr>
           <th>이름</th><th>전화번호</th><th>이메일</th><th>가입일</th>
-          <th>구독 플랜</th><th>관심종목</th><th>계정 상태</th>
+          <th>구독 플랜</th><th>관심종목</th><th>카카오</th><th>알림 이력</th><th>계정 상태</th>
         </tr>
       </thead>
       <tbody>
@@ -117,6 +117,12 @@
           <td>
             <button type="button" class="wl-btn" onclick="document.getElementById('wl-modal-{{ m.id }}').classList.add('open')">
               보기 ({{ m.watchlist_count }})
+            </button>
+          </td>
+          <td><span class="chip {{ 'buy' if m.kakao_connected else 'hold' }}">{{ '연동됨' if m.kakao_connected else '미연동' }}</span></td>
+          <td>
+            <button type="button" class="wl-btn" onclick="document.getElementById('notif-modal-{{ m.id }}').classList.add('open')">
+              보기 ({{ m.notification_count }})
             </button>
           </td>
           <td>
@@ -163,6 +169,35 @@
       </table>
       {% else %}
       <div class="footer-note" style="margin-top:0; border-top:none; padding-top:0;">등록한 관심종목이 없습니다.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+<div id="notif-modal-{{ m.id }}" class="modal-overlay" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <h2>{{ m.name or m.email }} — 카카오 알림 이력</h2>
+      <button class="modal-close" onclick="document.getElementById('notif-modal-{{ m.id }}').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      {% if m.notifications %}
+      <table>
+        <thead>
+          <tr><th>시각</th><th>종목</th><th>발송</th><th>메시지</th></tr>
+        </thead>
+        <tbody>
+          {% for n in m.notifications %}
+          <tr>
+            <td class="mono">{{ n.created_at[:16] }}</td>
+            <td class="mono">{{ n.code }}</td>
+            <td><span class="chip {{ 'buy' if n.sent_via_kakao else 'sell' }}">{{ '성공' if n.sent_via_kakao else '실패' }}</span></td>
+            <td style="white-space:normal; max-width:320px;">{{ n.message[:80] }}{{ '…' if n.message|length > 80 else '' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="footer-note" style="margin-top:0; border-top:none; padding-top:0;">발송된 알림이 없습니다.</div>
       {% endif %}
     </div>
   </div>
