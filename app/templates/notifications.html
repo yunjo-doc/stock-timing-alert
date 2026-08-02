@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Signals — AlphaTiming</title>
+<title>알림 — AlphaTiming</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="icon" type="image/png" href="/static/logo.png">
 </head>
@@ -16,9 +16,9 @@
   </div>
   <button class="nav-toggle" onclick="this.nextElementSibling.classList.toggle('open')">☰</button>
   <nav>
-    <a href="/">Dashboard</a>
-    <a href="/watchlist">Watchlist</a>
-    <a href="/notifications" class="active">Signals</a>
+    <a href="/">대시보드</a>
+    <a href="/watchlist">관심종목</a>
+    <a href="/notifications" class="active">알림</a>
     <a href="/pricing">요금제</a>
     {% if user %}
     <a href="/account">{{ user.email }}</a>

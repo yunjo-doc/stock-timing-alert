@@ -104,9 +104,9 @@
   </div>
   <button class="nav-toggle" onclick="this.nextElementSibling.classList.toggle('open')">☰</button>
   <nav>
-    <a href="/" class="active">Dashboard</a>
-    <a href="/watchlist?market={{ market }}">Watchlist</a>
-    <a href="/notifications">Signals</a>
+    <a href="/" class="active">대시보드</a>
+    <a href="/watchlist?market={{ market }}">관심종목</a>
+    <a href="/notifications">알림</a>
     <a href="/pricing">요금제</a>
     {% if user %}
     <a href="/account">{{ user.email }}</a>
@@ -199,28 +199,28 @@
     {% endif %}
   </div>
 
-  <!-- Section 1: Market Summary Cards -->
-  <div class="section-title"><span class="n">01</span> Market Summary</div>
+  <!-- Section 1: 시장 요약 카드 -->
+  <div class="section-title"><span class="n">01</span> 시장 요약</div>
   <div class="summary-grid">
     <div class="glass summary-card fade-in">
-      <div class="label"><span class="icon blue">⚡</span>Today's Signal</div>
+      <div class="label"><span class="icon blue">⚡</span>오늘의 신호</div>
       <div class="value" style="font-size:22px">{{ summary.dominant_signal }}</div>
       <div class="footline">관심종목 {{ watch_count }}개 중 우세 신호</div>
     </div>
     <div class="glass summary-card fade-in" style="animation-delay:.05s">
-      <div class="label"><span class="icon amber">☀</span>Market Temperature</div>
+      <div class="label"><span class="icon amber">☀</span>시장 온도</div>
       <div class="value">{{ summary.avg_temperature }}<span class="unit">/ 100</span></div>
       <div class="footline">
         {% if summary.avg_temperature >= 70 %}변동성 확대 국면{% elif summary.avg_temperature <= 35 %}박스권 · 저변동성{% else %}보통 수준{% endif %}
       </div>
     </div>
     <div class="glass summary-card fade-in" style="animation-delay:.1s">
-      <div class="label"><span class="icon teal">◆</span>AI Confidence</div>
-      <div class="value">{{ (summary.overall_score_10 * 10)|round(0)|int }}<span class="unit">%</span></div>
-      <div class="footline">{{ summary.buy_count }} 매수 · {{ summary.sell_count }} 매도 · {{ summary.hold_count }} 관망</div>
+      <div class="label"><span class="icon teal">◆</span>신호 분포</div>
+      <div class="value" style="font-size:19px">{{ summary.buy_count }} 매수 · {{ summary.sell_count }} 매도 · {{ summary.hold_count }} 관망</div>
+      <div class="footline">관심종목 {{ watch_count }}개 종목별 신호 개수</div>
     </div>
     <div class="glass summary-card fade-in" style="animation-delay:.15s">
-      <div class="label"><span class="icon coral">⚠</span>Risk Level</div>
+      <div class="label"><span class="icon coral">⚠</span>리스크 수준</div>
       <div class="value" style="font-size:22px">{{ summary.risk_level }}</div>
       <div class="footline">리스크관리 점수 기반 종합 판단</div>
     </div>
@@ -257,11 +257,11 @@
     {% set target_label = '목표가' %}
     {% set stop_label = '손절가' %}
   {% endif %}
-  <!-- Section 2: Timing Analysis -->
-  <div class="section-title"><span class="n">02</span> Timing Analysis — <span id="timingTitle">{{ featured.name }} ({{ featured.code }})</span></div>
+  <!-- Section 2: 타이밍 분석 -->
+  <div class="section-title"><span class="n">02</span> 타이밍 분석 — <span id="timingTitle">{{ featured.name }} ({{ featured.code }})</span></div>
   <div class="timing-grid">
     <div class="glass chart-card fade-in">
-      <div class="chart-title">Normal Distribution — 가격 위치</div>
+      <div class="chart-title">정규분포 — 가격 위치</div>
       <div class="chart-sub">z = <span id="zSubLabel">{{ featured.z_score if featured.z_score is not none else '—' }}</span></div>
       <svg viewBox="0 0 {{ bell.width }} {{ bell.height }}" width="100%" height="150">
         <polygon class="bell-area" points="{{ bell.area_points }}" fill="var(--secondary)"></polygon>
@@ -270,7 +270,7 @@
       </svg>
     </div>
     <div class="glass chart-card fade-in" style="animation-delay:.05s">
-      <div class="chart-title">Maxwell–Boltzmann — 거래 에너지</div>
+      <div class="chart-title">맥스웰-볼츠만 — 거래 에너지</div>
       <div class="chart-sub">평균 대비 <span id="mbSubLabel">{{ featured.volume_ratio if featured.volume_ratio is not none else '—' }}</span>배</div>
       <svg viewBox="0 0 {{ mb.width }} {{ mb.height }}" width="100%" height="150">
         <polygon class="bell-area" points="{{ mb.area_points }}" fill="var(--accent)"></polygon>
@@ -279,20 +279,20 @@
       </svg>
     </div>
     <div class="glass confidence-panel fade-in" style="animation-delay:.1s">
-      <div class="chart-title" style="margin-bottom:0">Today's Recommendation</div>
+      <div class="chart-title" style="margin-bottom:0">오늘의 추천</div>
       <span id="recBadge" class="rec-badge {{ featured.signal|lower }}">{{ featured.signal }}</span>
       <div class="confidence-row">
-        <div class="k">Confidence Score</div>
+        <div class="k">신뢰도</div>
         <div class="v" id="confidenceValue">{{ ((featured.final_score or 0)|abs * 100)|round(1) }}%</div>
         <div class="confidence-bar"><span id="confidenceBarInner" style="width:{{ ((featured.final_score or 0)|abs * 100)|round(0) }}%"></span></div>
       </div>
       <div class="rec-grid">
         <div class="confidence-row">
-          <div class="k">Current Price</div>
+          <div class="k">현재가</div>
           <div class="v" id="currentPriceValue" style="font-size:14px">{{ featured.current_price|price }}원</div>
         </div>
         <div class="confidence-row">
-          <div class="k">Risk</div>
+          <div class="k">리스크</div>
           <div class="v" style="font-size:14px">{{ summary.risk_level }}</div>
         </div>
         <div class="confidence-row">
@@ -307,8 +307,8 @@
     </div>
   </div>
 
-  <!-- Section 3: Signal Timeline -->
-  <div class="section-title"><span class="n">03</span> Signal Timeline</div>
+  <!-- Section 3: 신호 타임라인 -->
+  <div class="section-title"><span class="n">03</span> 신호 타임라인</div>
   <div class="glass timeline-card fade-in">
     <div class="timeline-track" id="timelineTrack">
       {% for step in timeline %}
@@ -321,8 +321,8 @@
     </div>
   </div>
 
-  <!-- Section 4: AI Analysis -->
-  <div class="section-title"><span class="n">04</span> AI Analysis</div>
+  <!-- Section 4: AI 분석 -->
+  <div class="section-title"><span class="n">04</span> AI 분석</div>
   <div class="glass ai-card fade-in">
     <div class="ai-summary">
       <b id="aiSummaryName">{{ featured.name }}</b>에 대한 종합 판단은 <b id="aiSummarySignal">{{ featured.signal }}</b> (종합점수 <span id="aiSummaryScore">{{ featured.final_score }}</span>)입니다.
@@ -339,14 +339,14 @@
   </div>
   {% endif %}
 
-  <!-- Section 5: Watchlist -->
-  <div class="section-title"><span class="n">05</span> Watchlist</div>
+  <!-- Section 5: 관심종목 -->
+  <div class="section-title"><span class="n">05</span> 관심종목</div>
   <div class="glass table-card fade-in">
     <table>
       <thead>
         <tr>
-          <th>Ticker</th><th>Company</th><th class="mono">Price</th><th class="mono">Daily %</th>
-          <th>Signal</th><th>Probability</th><th>Temperature</th><th>Risk</th><th></th>
+          <th>종목코드</th><th>종목명</th><th class="mono">가격</th><th class="mono">일간 변동률</th>
+          <th>신호</th><th>확률</th><th>온도</th><th>리스크</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -371,8 +371,8 @@
     </table>
   </div>
 
-  <!-- Section 6: Recent Alerts -->
-  <div class="section-title"><span class="n">06</span> Recent Alerts</div>
+  <!-- Section 6: 최근 알림 -->
+  <div class="section-title"><span class="n">06</span> 최근 알림</div>
   {% if recent_alerts %}
   <div class="alerts-grid">
     {% for n in recent_alerts %}
