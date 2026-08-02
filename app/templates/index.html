@@ -201,28 +201,63 @@
 
   <!-- Section 1: 시장 요약 카드 -->
   <div class="section-title"><span class="n">01</span> 시장 요약</div>
+  {% set buy_signals = signals|selectattr('signal','equalto','BUY')|list %}
+  {% set sell_signals = signals|selectattr('signal','equalto','SELL')|list %}
+  {% set hold_signals = signals|selectattr('signal','equalto','HOLD')|list %}
   <div class="summary-grid">
-    <div class="glass summary-card fade-in">
-      <div class="label"><span class="icon blue">⚡</span>오늘의 신호</div>
+    <div class="glass summary-card fade-in" onclick="this.classList.toggle('open')">
+      <div class="label"><span class="icon blue">⚡</span>오늘의 신호<span class="chev">▾</span></div>
       <div class="value" style="font-size:22px">{{ summary.dominant_signal }}</div>
       <div class="footline">관심종목 {{ watch_count }}개 중 우세 신호</div>
+      <div class="summary-detail">
+        <div class="sd-group-title">매수(BUY) 종목</div>
+        {% if buy_signals %}
+          {% for s in buy_signals %}
+          <div class="sd-row"><span>{{ s.name }} ({{ s.code }})</span><b>{{ s.current_price|price }}원</b></div>
+          {% endfor %}
+        {% else %}
+          <div class="sd-empty">현재 매수 신호인 종목이 없습니다.</div>
+        {% endif %}
+      </div>
     </div>
-    <div class="glass summary-card fade-in" style="animation-delay:.05s">
-      <div class="label"><span class="icon amber">☀</span>시장 온도</div>
+    <div class="glass summary-card fade-in" style="animation-delay:.05s" onclick="this.classList.toggle('open')">
+      <div class="label"><span class="icon amber">☀</span>시장 온도<span class="chev">▾</span></div>
       <div class="value">{{ summary.avg_temperature }}<span class="unit">/ 100</span></div>
       <div class="footline">
         {% if summary.avg_temperature >= 70 %}변동성 확대 국면{% elif summary.avg_temperature <= 35 %}박스권 · 저변동성{% else %}보통 수준{% endif %}
       </div>
+      <div class="summary-detail">
+        관심종목들의 최근 변동성(수익률 표준편차)과 거래량 에너지를 결합해 0~100 사이로 나타낸 지표입니다.
+        온도가 높을수록 변동성·거래량이 커지고 시장의 공포·탐욕 심리가 강해진 상태를 의미하며,
+        급격한 온도 상승은 큰 하락 전에 나타나는 경우도 있어 리스크 관리에 참고할 수 있습니다.
+        <br><br>
+        <b>70 이상</b>: 변동성 확대 국면 · <b>35 이하</b>: 박스권/저변동성 · 그 사이: 보통 수준
+      </div>
     </div>
-    <div class="glass summary-card fade-in" style="animation-delay:.1s">
-      <div class="label"><span class="icon teal">◆</span>신호 분포</div>
+    <div class="glass summary-card fade-in" style="animation-delay:.1s" onclick="this.classList.toggle('open')">
+      <div class="label"><span class="icon teal">◆</span>신호 분포<span class="chev">▾</span></div>
       <div class="value" style="font-size:19px">{{ summary.buy_count }} 매수 · {{ summary.sell_count }} 매도 · {{ summary.hold_count }} 관망</div>
       <div class="footline">관심종목 {{ watch_count }}개 종목별 신호 개수</div>
+      <div class="summary-detail">
+        <div class="sd-group-title">매수 ({{ summary.buy_count }})</div>
+        {% if buy_signals %}{% for s in buy_signals %}<div class="sd-row"><span>{{ s.name }} ({{ s.code }})</span></div>{% endfor %}{% else %}<div class="sd-empty">없음</div>{% endif %}
+        <div class="sd-group-title">매도 ({{ summary.sell_count }})</div>
+        {% if sell_signals %}{% for s in sell_signals %}<div class="sd-row"><span>{{ s.name }} ({{ s.code }})</span></div>{% endfor %}{% else %}<div class="sd-empty">없음</div>{% endif %}
+        <div class="sd-group-title">관망 ({{ summary.hold_count }})</div>
+        {% if hold_signals %}{% for s in hold_signals %}<div class="sd-row"><span>{{ s.name }} ({{ s.code }})</span></div>{% endfor %}{% else %}<div class="sd-empty">없음</div>{% endif %}
+      </div>
     </div>
-    <div class="glass summary-card fade-in" style="animation-delay:.15s">
-      <div class="label"><span class="icon coral">⚠</span>리스크 수준</div>
+    <div class="glass summary-card fade-in" style="animation-delay:.15s" onclick="this.classList.toggle('open')">
+      <div class="label"><span class="icon coral">⚠</span>리스크 수준<span class="chev">▾</span></div>
       <div class="value" style="font-size:22px">{{ summary.risk_level }}</div>
       <div class="footline">리스크관리 점수 기반 종합 판단</div>
+      <div class="summary-detail">
+        관심종목들의 평균 시장온도(<b>{{ summary.avg_temperature }}</b>/100)와 평균 리스크 점수(<b>{{ summary.avg_risk_score }}</b>)를 기준으로 판단합니다.
+        <br><br>
+        <b>High</b>: 평균 시장온도 70 이상이거나 평균 리스크 점수가 -0.2 미만일 때<br>
+        <b>Low</b>: 평균 시장온도 35 이하이면서 평균 리스크 점수가 0.3 이상일 때<br>
+        <b>Medium</b>: 그 외의 경우
+      </div>
     </div>
   </div>
 

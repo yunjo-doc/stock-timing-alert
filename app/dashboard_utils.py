@@ -90,7 +90,7 @@ def market_summary(signals: list):
     """관심종목 전체를 요약하는 4개 카드용 통계"""
     if not signals:
         return {
-            "overall_score_10": 0, "avg_temperature": 0, "risk_level": "—",
+            "overall_score_10": 0, "avg_temperature": 0, "avg_risk_score": 0, "risk_level": "—",
             "buy_count": 0, "sell_count": 0, "hold_count": 0, "dominant_signal": "HOLD",
         }
 
@@ -118,6 +118,7 @@ def market_summary(signals: list):
     return {
         "overall_score_10": overall_score_10,
         "avg_temperature": avg_temperature,
+        "avg_risk_score": round(avg_risk, 2),
         "risk_level": risk_level,
         "buy_count": buy_count, "sell_count": sell_count, "hold_count": hold_count,
         "dominant_signal": dominant_signal,
