@@ -14,6 +14,7 @@ FastAPI 메인 앱
   GET  /login, POST /login      로그인
   POST /logout                   로그아웃
   GET  /auth/kakao/login, /auth/kakao/callback  카카오 계정으로 로그인/가입
+  GET  /complete-profile, POST /complete-profile  카카오 최초 가입 시 이름/전화번호 입력 (로그인 필요)
   GET  /account                    내 계정 (카카오 나에게 채팅 연동 관리)
   GET  /kakao/authorize              카카오 연동 인증 URL로 리다이렉트 (로그인 필요)
   GET  /kakao/callback                인증 후 콜백 -> 로그인한 사용자에 토큰 저장
@@ -28,6 +29,7 @@ FastAPI 메인 앱
   GET  /admin/members                          회원현황(관심종목/매수·매도 제안일/구독) 대시보드
   POST /admin/members/{user_id}/plan             관리자가 회원 구독 플랜 한 단계 증가/감소 (direction=up/down)
   POST /admin/members/{user_id}/toggle-active      회원 계정 활성/정지 토글
+  POST /admin/members/{user_id}/profile             관리자가 회원 이름/전화번호 수정
   GET  /api/signals              최신 신호 JSON (외부 연동용)
 """
 
@@ -156,6 +158,8 @@ def dashboard(request: Request, market: str = "stock"):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/", status_code=303)
+    if auth.needs_profile_completion(user):
+        return RedirectResponse(url="/complete-profile", status_code=303)
     market = market if market in ("stock", "crypto") else "stock"
 
     cfg = load_config()
@@ -221,6 +225,8 @@ def watchlist_page(request: Request, error: str = "", market: str = "stock"):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/watchlist", status_code=303)
+    if auth.needs_profile_completion(user):
+        return RedirectResponse(url="/complete-profile", status_code=303)
     market = market if market in ("stock", "crypto") else "stock"
 
     plan = billing_plans.get_plan(db.get_user_plan_key(user["id"]))
@@ -351,6 +357,37 @@ def kakao_login_callback(request: Request, code: str = ""):
     user_id = user["id"] if user else db.create_user_from_kakao(kakao_id)
 
     auth.login_user(request, user_id)
+    user = db.get_user_by_id(user_id)
+    if auth.needs_profile_completion(user):
+        # 카카오 로그인은 닉네임 동의만 받아서 이름/전화번호가 비어있습니다.
+        # 회원가입과 동일하게, 서비스를 쓰기 전에 이 정보를 먼저 받습니다.
+        return RedirectResponse(url="/complete-profile", status_code=303)
+    return RedirectResponse(url="/account", status_code=303)
+
+
+# ----------------------------------------------------------------------
+# 추가 정보 입력 (카카오 최초 가입 시 이름/전화번호가 비어있는 경우 강제로 받습니다)
+# ----------------------------------------------------------------------
+@app.get("/complete-profile", response_class=HTMLResponse)
+def complete_profile_page(request: Request, error: str = ""):
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/complete-profile", status_code=303)
+    if not auth.needs_profile_completion(user):
+        return RedirectResponse(url="/account", status_code=303)
+    return templates.TemplateResponse(request, "complete_profile.html", {"user": user, "error": error})
+
+
+@app.post("/complete-profile")
+def complete_profile_submit(request: Request, name: str = Form(...), phone: str = Form(...)):
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/complete-profile", status_code=303)
+    if not name.strip() or not phone.strip():
+        return RedirectResponse(
+            url=f"/complete-profile?error={quote('이름과 전화번호를 모두 입력해주세요')}", status_code=303
+        )
+    db.update_user_profile(user["id"], name, phone)
     return RedirectResponse(url="/account", status_code=303)
 
 
@@ -668,4 +705,13 @@ def admin_toggle_active(request: Request, user_id: int):
     if not _is_admin_session(request):
         return RedirectResponse(url="/admin/login", status_code=303)
     db.toggle_user_active(user_id)
+    return RedirectResponse(url="/admin/members", status_code=303)
+
+
+@app.post("/admin/members/{user_id}/profile")
+def admin_update_profile(request: Request, user_id: int, name: str = Form(""), phone: str = Form("")):
+    """관리자가 카카오 가입 등으로 이름/전화번호가 비어있거나 잘못 들어간 회원 정보를 수정합니다."""
+    if not _is_admin_session(request):
+        return RedirectResponse(url="/admin/login", status_code=303)
+    db.update_user_profile(user_id, name, phone)
     return RedirectResponse(url="/admin/members", status_code=303)

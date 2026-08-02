@@ -35,3 +35,9 @@ def login_user(request: Request, user_id: int):
 
 def logout_user(request: Request):
     request.session.clear()
+
+
+def needs_profile_completion(user: dict) -> bool:
+    """카카오 로그인은 닉네임 동의만 받고 이름/전화번호를 요청하지 않아서,
+    가입 직후 이 값들이 비어있는 계정을 "쓰레기 데이터" 없이 채우도록 강제할 때 씁니다."""
+    return not (user.get("name") and user.get("phone"))

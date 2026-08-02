@@ -286,6 +286,16 @@ def create_user_from_kakao(kakao_id: str):
         return cur.lastrowid
 
 
+def update_user_profile(user_id: int, name: str, phone: str):
+    """카카오 최초 가입 시 추가정보 입력, 또는 관리자의 회원 정보 수정에서 사용합니다."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE users SET name=?, phone=? WHERE id=?",
+            (name.strip(), phone.strip(), user_id),
+        )
+        conn.commit()
+
+
 def promote_to_admin(user_id: int):
     with get_conn() as conn:
         conn.execute("UPDATE users SET is_admin=1 WHERE id=?", (user_id,))

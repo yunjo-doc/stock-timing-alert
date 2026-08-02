@@ -89,7 +89,11 @@
         {% for m in members %}
         <tr>
           <td>{{ m.name or '—' }}</td>
-          <td class="mono">{{ m.phone or '—' }}</td>
+          <td class="mono">
+            {{ m.phone or '—' }}
+            <button type="button" class="wl-btn" style="padding:2px 8px; font-size:10.5px; margin-left:6px;"
+                    onclick="document.getElementById('profile-modal-{{ m.id }}').classList.add('open')">수정</button>
+          </td>
           <td>{{ m.email }}</td>
           <td class="mono">{{ m.created_at[:10] }}</td>
           <td>
@@ -199,6 +203,27 @@
       {% else %}
       <div class="footer-note" style="margin-top:0; border-top:none; padding-top:0;">발송된 알림이 없습니다.</div>
       {% endif %}
+    </div>
+  </div>
+</div>
+<div id="profile-modal-{{ m.id }}" class="modal-overlay" onclick="if(event.target===this) this.classList.remove('open')">
+  <div class="modal-panel" style="max-width:360px;">
+    <div class="modal-header">
+      <h2>{{ m.email }} — 회원정보 수정</h2>
+      <button class="modal-close" onclick="document.getElementById('profile-modal-{{ m.id }}').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <form method="post" action="/admin/members/{{ m.id }}/profile">
+        <div style="margin-bottom:10px;">
+          <label style="font-size:11.5px; color:var(--muted); display:block; margin-bottom:4px;">이름</label>
+          <input type="text" name="name" value="{{ m.name }}" style="width:100%">
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:11.5px; color:var(--muted); display:block; margin-bottom:4px;">전화번호</label>
+          <input type="text" name="phone" value="{{ m.phone }}" style="width:100%">
+        </div>
+        <button type="submit" style="width:100%">저장</button>
+      </form>
     </div>
   </div>
 </div>
