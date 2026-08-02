@@ -35,6 +35,7 @@ FastAPI 메인 앱
 
 import os
 import sys
+import threading
 import uuid
 from datetime import datetime, timedelta
 from urllib.parse import quote
@@ -72,6 +73,15 @@ BILLING_PERIOD_DAYS = 30
 RUN_NOW_COOLDOWN_SECONDS = 60
 
 app = FastAPI(title="AlphaTiming")
+
+
+@app.get("/healthz", include_in_schema=False)
+def healthz():
+    """Render 헬스체크용. DB/외부 API를 건드리지 않고 즉시 응답해서, 배포 시 새 인스턴스가
+    실제로 요청을 받을 준비가 됐는지 빠르게 판단할 수 있게 합니다."""
+    return {"status": "ok"}
+
+
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "dev-insecure-secret-change-me"))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "app", "templates"))
 templates.env.filters["from_json"] = lambda s: __import__("json").loads(s) if s else []
@@ -113,7 +123,11 @@ def on_startup():
     _scheduler.add_job(lambda: send_daily_digest(load_config()), "cron", hour=16, minute=0,
                         timezone="Asia/Seoul", id="daily_digest", replace_existing=True)
     _scheduler.start()
-    refresh_market_snapshot()
+    # refresh_market_snapshot()은 네이버/CoinGecko로 나가는 블로킹 HTTP 호출이 있어서,
+    # 여기서 동기 호출하면 그만큼 앱이 "준비 완료" 신호를 늦게 보내 배포/재시작 때마다
+    # Render 헬스체크 실패(502) 구간이 길어집니다. 스레드로 분리해 서버가 바로 요청을
+    # 받을 수 있게 하고, 지수/시세는 조금 늦게 채워지도록 합니다.
+    threading.Thread(target=refresh_market_snapshot, daemon=True).start()
     print(f"[스케줄러 시작] {interval}분 주기로 자동 분석을, 24시간 주기로 정기결제를, "
           f"매일 09시/15시(KST)에 시장 지수 스냅샷을, 매일 16시(KST)에 일일 요약 알림을 갱신/실행합니다.")
 
