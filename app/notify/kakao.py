@@ -103,11 +103,12 @@ def _send_with_refresh(user: dict, message: str, rest_api_key: str, client_secre
 
 def notify_all_connected_users(code: str, message: str, cfg: dict):
     """
-    카카오 '나에게 보내기'를 연동한 모든 사용자에게 알림을 보낸다.
+    카카오 '나에게 보내기'를 연동하고, 해당 종목을 관심종목으로 등록한 사용자에게만 알림을 보낸다.
+    (관심종목 등록 개수로 과금하는 구조이므로, 등록하지 않은 종목의 신호까지 받으면 안 됩니다.)
     access_token이 만료된 경우(401) refresh_token으로 한 번 자동 갱신 후 재시도한다.
-    연동한 사용자가 한 명도 없으면 콘솔 로그로 대체한다.
+    연동+등록한 사용자가 한 명도 없으면 콘솔 로그로 대체한다.
     """
-    users = db.get_all_kakao_connected_users()
+    users = db.get_kakao_connected_users_watching(code)
 
     if not users:
         print(f"[알림 - 카카오 연동 사용자 없음, 로그 대체]\n{message}\n")

@@ -342,6 +342,20 @@ def get_all_kakao_connected_users():
         return [dict(r) for r in rows]
 
 
+def get_kakao_connected_users_watching(code: str):
+    """관심종목 개수로 과금하는 구조이므로, 신호 알림도 해당 종목을 실제로
+    관심종목에 등록한 회원에게만 보냅니다 (등록하지 않은 회원까지 받으면
+    구독 유인이 사라집니다)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT DISTINCT u.* FROM users u
+               INNER JOIN user_watchlist w ON w.user_id = u.id
+               WHERE w.code = ? AND u.kakao_access_token IS NOT NULL AND u.kakao_access_token != ''""",
+            (code,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
 def get_latest_signals_for_dashboard():
     """각 종목의 가장 최근 분석 결과 1건씩 반환"""
     with get_conn() as conn:
