@@ -20,8 +20,11 @@ KAKAO_USER_ME_URL = "https://kapi.kakao.com/v2/user/me"
 
 
 def get_authorize_url(rest_api_key: str, redirect_uri: str, scope: str = "talk_message") -> str:
+    # prompt=login 을 주지 않으면 카카오 로그인 세션이 남아있는 경우 동의 화면 자체를
+    # 건너뛰고 예전에 허용했던 스코프 그대로 즉시 리다이렉트해버려서, 연동 해제 후 재연동해도
+    # talk_message 동의 체크박스를 다시 볼 기회가 없이 바로 "연결됨"으로 넘어가는 문제가 있었습니다.
     return (f"{KAKAO_AUTH_URL}?client_id={rest_api_key}"
-            f"&redirect_uri={redirect_uri}&response_type=code&scope={scope}")
+            f"&redirect_uri={redirect_uri}&response_type=code&scope={scope}&prompt=login")
 
 
 def get_user_profile(access_token: str) -> dict:
