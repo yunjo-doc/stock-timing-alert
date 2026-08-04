@@ -52,6 +52,11 @@
     테스트 알림 전송에 실패했습니다. 카카오 연동 상태를 확인해주세요.
   </div>
   {% endif %}
+  {% if error %}
+  <div class="glass panel fade-in" style="border-color:var(--danger); margin-bottom:16px; padding:14px 18px; font-size:13px; color:var(--danger);">
+    {{ error }}
+  </div>
+  {% endif %}
 
   <div class="glass panel fade-in">
     <div style="font-size:13px; color:var(--muted); margin-bottom:4px;">이메일</div>

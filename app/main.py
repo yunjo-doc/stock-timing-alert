@@ -410,7 +410,7 @@ def complete_profile_submit(request: Request, name: str = Form(...), phone: str 
 # ----------------------------------------------------------------------
 @app.get("/account", response_class=HTMLResponse)
 def account_page(request: Request, subscribed: int = 0, canceled: int = 0, downgrade_scheduled: int = 0,
-                  test_sent: int = 0, test_failed: int = 0):
+                  test_sent: int = 0, test_failed: int = 0, error: str = ""):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/account", status_code=303)
@@ -423,7 +423,7 @@ def account_page(request: Request, subscribed: int = 0, canceled: int = 0, downg
         "user": user, "plan": plan, "subscription": subscription, "payments": payments,
         "pending_plan": pending_plan,
         "subscribed": subscribed, "canceled": canceled, "downgrade_scheduled": downgrade_scheduled,
-        "test_sent": test_sent, "test_failed": test_failed,
+        "test_sent": test_sent, "test_failed": test_failed, "error": error,
     })
 
 
@@ -618,6 +618,17 @@ def kakao_callback(request: Request, code: str = ""):
         token_data = kakao_mod.exchange_code_for_token(rest_api_key, code, redirect_uri, cfg["kakao"].get("client_secret", ""))
     except Exception as e:
         return HTMLResponse(f"카카오 연동에 실패했습니다: {e}", status_code=400)
+
+    # "카카오톡 메시지 전송" 동의항목이 선택 동의로 설정되어 있으면, 사용자가 동의 화면에서
+    # 그 항목 체크를 해제(또는 무시)한 채로도 로그인 자체는 성공할 수 있습니다. 그 경우
+    # access_token은 발급되지만 메시지 전송 권한이 없어 실제 알림은 계속 실패하므로,
+    # 여기서 발급된 scope에 talk_message가 포함됐는지 확인해 "연동됨"으로 잘못 표시하지 않게 합니다.
+    granted_scopes = (token_data.get("scope") or "").split()
+    if "talk_message" not in granted_scopes:
+        return RedirectResponse(
+            url=f"/account?error={quote('카카오톡 메시지 전송 권한에 동의하지 않아 연동이 완료되지 않았습니다. 다시 시도할 때 카카오 동의 화면에서 카카오톡 메시지 전송 항목에 동의해주세요.')}",
+            status_code=303,
+        )
 
     db.save_user_kakao_tokens(user["id"], token_data.get("access_token"), token_data.get("refresh_token"))
     return RedirectResponse(url="/account?connected=1", status_code=303)
