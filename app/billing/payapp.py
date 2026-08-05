@@ -60,7 +60,8 @@ def _call(payload: dict) -> dict:
 def register_subscription(goodname: str, goodprice: int, recvphone: str, cycle_day: int,
                            expire_date: str, feedbackurl: str, failurl: str = "",
                            var1: str = "", var2: str = "") -> dict:
-    """정기결제 등록. cycle_day: 매월 결제일(1~31, 90=말일). expire_date: 'yyyy-mm-dd'."""
+    """정기결제 등록. cycle_day: 매월 결제일(1~31, 90=말일). expire_date: 'yyyy-mm-dd'.
+    정기결제는 PayApp API 특성상 결제수단이 신용카드/휴대전화 두 가지뿐이라 둘 다 열어둡니다."""
     return _call({
         "cmd": "rebillRegist",
         "goodname": goodname,
@@ -74,6 +75,7 @@ def register_subscription(goodname: str, goodprice: int, recvphone: str, cycle_d
         "var1": var1,
         "var2": var2,
         "smsuse": "n",
+        "openpaytype": "card,phone",
     })
 
 
