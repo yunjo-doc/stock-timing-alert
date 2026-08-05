@@ -98,6 +98,20 @@ def _parse_sise_day(html: str):
     return rows
 
 
+def _get_item_name(code: str) -> str:
+    """종목 코드로 종목명을 조회합니다 (검색어가 단일 종목과 정확히 일치할 때 사용).
+    이 페이지는 검색 페이지(search.naver)와 달리 utf-8로 서비스됩니다."""
+    try:
+        resp = requests.get(f"https://finance.naver.com/item/main.naver?code={code}",
+                             headers=HEADERS, timeout=10)
+        resp.raise_for_status()
+        resp.encoding = "utf-8"
+        m = re.search(r"<title>(.*?)\s*:\s*Npay 증권</title>", resp.text)
+        return m.group(1).strip() if m else ""
+    except requests.RequestException:
+        return ""
+
+
 def search_stocks(query: str, limit: int = 15):
     """
     종목명(또는 코드)으로 네이버 금융 통합검색을 호출해 {code, name} 목록을 반환합니다.
@@ -114,6 +128,15 @@ def search_stocks(query: str, limit: int = 15):
     except requests.RequestException as e:
         print(f"[네이버 검색 오류] query={query}: {e}")
         return []
+
+    # 검색어가 종목 하나와 정확히 일치하면, 네이버는 검색 결과 목록 대신
+    # 해당 종목 페이지로 즉시 이동시키는 리다이렉트 스크립트만 내려줘서
+    # 아래 목록 파싱으로는 결과를 찾지 못합니다. 이 경우를 별도로 처리합니다.
+    redirect_match = re.search(r"location\.href='/item/main\.naver\?code=([A-Za-z0-9]+)'", html)
+    if redirect_match:
+        code = redirect_match.group(1)
+        name = _get_item_name(code)
+        return [{"code": code, "name": name}] if name else []
 
     seen = set()
     results = []
