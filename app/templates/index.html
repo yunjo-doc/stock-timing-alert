@@ -37,6 +37,36 @@
   position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
 }
 
+.sub-link { cursor: pointer; text-decoration: none; border-bottom: 1px dashed var(--line); }
+.sub-link:hover { color: var(--text); border-bottom-color: var(--text); }
+
+.guide-modal {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(6,19,26,0.78); align-items: center; justify-content: center; padding: 20px;
+}
+.guide-modal.open { display: flex; }
+.guide-modal-inner {
+  position: relative; width: 100%; max-width: 640px; max-height: 85vh;
+  overflow-y: auto; background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); padding: 28px 26px;
+  box-shadow: 0 16px 32px -20px rgba(15,23,42,0.4);
+}
+.guide-modal-close {
+  position: absolute; top: 14px; right: 16px; background: transparent; border: none;
+  font-size: 24px; line-height: 1; cursor: pointer; padding: 4px 8px; color: var(--muted);
+}
+.guide-modal-close:hover { color: var(--text); }
+.guide-section { margin-bottom: 22px; }
+.guide-section:last-child { margin-bottom: 0; }
+.guide-section h3 {
+  font-size: 14px; margin: 0 0 10px; color: var(--secondary);
+  font-family: var(--font-mono); letter-spacing: -0.01em;
+}
+.guide-term { margin-bottom: 12px; }
+.guide-term:last-child { margin-bottom: 0; }
+.guide-term .gt-name { font-size: 13.5px; font-weight: 700; margin-bottom: 3px; }
+.guide-term .gt-desc { font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+
 .hero-band {
   display: flex; flex-direction: column; gap: 14px; padding: 26px 4px 30px;
 }
@@ -95,7 +125,7 @@
       <img src="/static/logo.png" alt="AlphaTiming" class="brand-logo">
       <h1>AlphaTiming</h1>
     </a>
-    <span class="sub">확률분포 · 시장온도 · 추세 · 펀더멘털 · 리스크</span>
+    <a href="#" class="sub sub-link" onclick="openGuideModal(event)" title="화면 용어 설명 보기">확률분포 · 시장온도 · 추세 · 펀더멘털 · 리스크</a>
     <a href="#" class="yt-guide-link" onclick="openYoutubeModal(event)" title="맥스웰분포, 정규분포 가이드 영상 보기">
       <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="1" y="4" width="22" height="16" rx="5" fill="#FF0000"/>
@@ -126,6 +156,91 @@
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowfullscreen></iframe>
     </div>
+  </div>
+</div>
+
+<div id="guideModal" class="guide-modal" onclick="if (event.target === this) closeGuideModal();">
+  <div class="guide-modal-inner">
+    <button type="button" class="guide-modal-close" onclick="closeGuideModal()">&times;</button>
+
+    <div class="guide-section">
+      <h3>핵심 5대 지표</h3>
+      <div class="guide-term">
+        <div class="gt-name">확률분포</div>
+        <div class="gt-desc">최근 가격을 종모양 그래프(정규분포)에 놓고, 지금 가격이 평균에서 얼마나 벗어나 있는지 봅니다. 많이 벗어나 있을수록(z값이 클수록) 곧 평균 쪽으로 되돌아올 가능성이 크다고 봅니다.</div>
+      </div>
+      <div class="guide-term">
+        <div class="gt-name">시장온도</div>
+        <div class="gt-desc">거래량과 가격 움직임을 합쳐 시장이 얼마나 "과열"됐는지 0~100으로 나타냅니다. 높을수록 흥분된 장세, 낮을수록 조용한 장세입니다.</div>
+      </div>
+      <div class="guide-term">
+        <div class="gt-name">추세</div>
+        <div class="gt-desc">단기·중기·장기 이동평균선이 어떤 순서로 배열되어 있는지로 방향성을 판단합니다. 짧은 기간 평균이 위에 있으면 상승 추세(정배열), 아래에 있으면 하락 추세(역배열)입니다.</div>
+      </div>
+      <div class="guide-term">
+        <div class="gt-name">펀더멘털</div>
+        <div class="gt-desc">PER·PBR·ROE 같은 기업 가치 지표입니다. 회사 실적/재무 상태에 비해 지금 주가가 비싼지 싼지를 봅니다.</div>
+      </div>
+      <div class="guide-term">
+        <div class="gt-name">리스크</div>
+        <div class="gt-desc">손절가·목표가 폭과 변동성을 반영한 위험도입니다. 숫자가 높을수록 더 조심해야 하는 종목입니다.</div>
+      </div>
+    </div>
+
+    <div class="guide-section">
+      <h3>02 타이밍 분석 화면</h3>
+      <div class="guide-term">
+        <div class="gt-name">정규분포 — 가격 위치 (z값)</div>
+        <div class="gt-desc">위 "확률분포"를 그래프로 보여주는 부분입니다. 점이 종모양 그래프 가운데서 멀수록(z가 ±2 이상) 통계적으로 드문(과열/침체) 상태라는 뜻입니다.</div>
+      </div>
+      <div class="guide-term">
+        <div class="gt-name">맥스웰-볼츠만 — 거래 에너지</div>
+        <div class="gt-desc">최근 거래량이 평소 평균 대비 몇 배인지 보여줍니다. 1배보다 크면 평소보다 거래가 활발하다는 뜻입니다.</div>
+      </div>
+      <div class="guide-term">
+        <div class="gt-name">오늘의 추천 / 신뢰도</div>
+        <div class="gt-desc">AI가 5대 지표를 종합해 내린 최종 결론(BUY/SELL/HOLD)과, 그 판단을 얼마나 확신하는지를 %로 보여줍니다.</div>
+      </div>
+      <div class="guide-term">
+        <div class="gt-name">목표가 / 손절가 (또는 예상 상단 / 하단)</div>
+        <div class="gt-desc">지금 매수한다고 가정했을 때 기대할 수 있는 상승 목표와, 손실을 제한하기 위한 기준가입니다. HOLD일 때는 방향성 추천이 아니므로 "예상 변동 상단/하단"으로 표시됩니다.</div>
+      </div>
+    </div>
+
+    <div class="guide-section">
+      <h3>03 신호 타임라인</h3>
+      <div class="guide-term">
+        <div class="gt-desc">AI가 결론에 이르는 과정을 5단계로 보여줍니다: <b>시가 형성</b>(오늘 가격 확인) → <b>확률 신호 감지</b>(정규분포로 위치 확인) → <b>거래 에너지 확인</b>(거래량 확인) → <b>추세 확인</b>(이동평균 배열 확인) → <b>최종 판단</b>(BUY/SELL/HOLD 결정). 순서대로 어떤 근거들이 쌓여서 결론이 나왔는지 한눈에 볼 수 있습니다.</div>
+      </div>
+    </div>
+
+    <div class="guide-section">
+      <h3>04 AI 분석 화면</h3>
+      <div class="guide-term">
+        <div class="gt-name">RSI</div>
+        <div class="gt-desc">최근 상승폭과 하락폭을 비교해 "과매수/과매도"를 보는 대표적인 보조지표입니다. 보통 70 이상이면 과매수(너무 많이 오름), 30 이하면 과매도(너무 많이 내림)로 봅니다.</div>
+      </div>
+      <div class="guide-term">
+        <div class="gt-name">추세 (정배열 / 역배열)</div>
+        <div class="gt-desc">정배열(단기&gt;중기&gt;장기)은 상승 추세, 역배열(단기&lt;중기&lt;장기)은 하락 추세를 뜻합니다.</div>
+      </div>
+    </div>
+
+    <div class="guide-section">
+      <h3>05 관심종목 표</h3>
+      <div class="guide-term">
+        <div class="gt-name">일간 변동률</div>
+        <div class="gt-desc">전날 종가 대비 오늘 몇 % 올랐는지/내렸는지입니다.</div>
+      </div>
+      <div class="guide-term">
+        <div class="gt-name">신호 / 확률 / 온도 / 리스크</div>
+        <div class="gt-desc">위 핵심 5대 지표와 같은 의미입니다. "신호"는 AI의 최종 결론(BUY/SELL/HOLD), "확률"은 정규분포 상 위치, "온도"는 시장 과열도, "리스크"는 위험도입니다.</div>
+      </div>
+    </div>
+
+    <p style="font-size:11.5px; color:var(--muted); margin-top:22px; line-height:1.6;">
+      이 화면의 모든 지표는 통계적 참고 지표이며 투자 조언이 아닙니다. 투자 판단과 결과의 책임은 본인에게 있습니다.
+    </p>
   </div>
 </div>
 
@@ -509,6 +624,15 @@ function openYoutubeModal(e) {
 function closeYoutubeModal() {
   document.getElementById('youtubeModal').classList.remove('open');
   document.getElementById('youtubeModalFrame').src = '';
+}
+
+function openGuideModal(e) {
+  if (e) e.preventDefault();
+  document.getElementById('guideModal').classList.add('open');
+}
+
+function closeGuideModal() {
+  document.getElementById('guideModal').classList.remove('open');
 }
 
 // 분석 피드 항목 클릭 시, 아래 Timing Analysis / Signal Timeline / AI Analysis 패널을
