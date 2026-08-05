@@ -142,6 +142,7 @@ def init_db():
         _ensure_column(conn, "user_watchlist", "market", "TEXT NOT NULL DEFAULT 'stock'")
         _ensure_column(conn, "subscriptions", "pending_plan", "TEXT")
         _ensure_column(conn, "subscriptions", "pending_price", "INTEGER")
+        _ensure_column(conn, "subscriptions", "provider", "TEXT NOT NULL DEFAULT 'toss'")
         conn.commit()
 
 
@@ -506,6 +507,16 @@ def get_active_subscription(user_id: int):
         return dict(row) if row else None
 
 
+def get_subscription_by_billing_key(billing_key: str):
+    """PayApp feedbackurl 통보에서 rebill_no로 기존 구독을 찾을 때 사용 (최초 등록인지 재청구인지 구분)."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM subscriptions WHERE billing_key=? ORDER BY id DESC LIMIT 1",
+            (billing_key,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
 def get_user_plan_key(user_id: int) -> str:
     sub = get_active_subscription(user_id)
     if not sub:
@@ -515,7 +526,8 @@ def get_user_plan_key(user_id: int) -> str:
     return sub["plan"]
 
 
-def create_subscription(user_id, plan, price, billing_key, customer_key, period_start, period_end):
+def create_subscription(user_id, plan, price, billing_key, customer_key, period_start, period_end,
+                         provider="toss"):
     with get_conn() as conn:
         # 기존 활성 구독은 교체(취소) 처리
         conn.execute(
@@ -524,9 +536,9 @@ def create_subscription(user_id, plan, price, billing_key, customer_key, period_
         )
         cur = conn.execute(
             "INSERT INTO subscriptions (user_id, plan, price, status, billing_key, customer_key, "
-            "current_period_start, current_period_end, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            "current_period_start, current_period_end, created_at, provider) VALUES (?,?,?,?,?,?,?,?,?,?)",
             (user_id, plan, price, "active", billing_key, customer_key,
-             period_start, period_end, datetime.now().isoformat()),
+             period_start, period_end, datetime.now().isoformat(), provider),
         )
         conn.commit()
         return cur.lastrowid

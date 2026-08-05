@@ -10,6 +10,7 @@ from .notify import kakao
 from . import db
 from . import dashboard_utils as du
 from .billing import toss as toss_client
+from .billing import kakaopay as kakaopay_client
 from .billing.plans import get_plan
 
 # market별 데이터소스: 증권(stock)은 네이버 금융, 가상자산(crypto)은 업비트
@@ -101,6 +102,11 @@ def run_billing_cycle():
     print(f"[정기결제] 청구 대상 {len(due)}건")
 
     for sub in due:
+        # PayApp은 우리가 직접 청구하지 않고 PayApp이 자체적으로 주기 청구 후
+        # feedbackurl로 통보합니다(/billing/payapp/feedback 참고). 여기서는 건너뜁니다.
+        if sub.get("provider") == "payapp":
+            continue
+
         pending_plan_key = sub.get("pending_plan")
 
         # 하위 플랜(무료)으로 예약된 다운그레이드는 결제 없이 구독을 종료합니다.
@@ -113,12 +119,19 @@ def run_billing_cycle():
         plan = get_plan(pending_plan_key) if pending_plan_key else get_plan(sub["plan"])
         order_prefix = "downgrade" if pending_plan_key else "renew"
         order_id = f"{order_prefix}-{sub['user_id']}-{uuid.uuid4().hex[:12]}"
+        item_name = f"AlphaTiming {plan['name']} 플랜 정기결제"
         try:
-            charge = toss_client.charge_billing(
-                sub["billing_key"], sub["customer_key"], plan["price"], order_id,
-                f"AlphaTiming {plan['name']} 플랜 정기결제",
-            )
-        except toss_client.TossError as e:
+            if sub.get("provider") == "kakao":
+                charge = kakaopay_client.charge_subscription(
+                    sub["billing_key"], order_id, sub["customer_key"], item_name, plan["price"],
+                )
+                method = charge.get("payment_method_type", "card").lower()
+            else:
+                charge = toss_client.charge_billing(
+                    sub["billing_key"], sub["customer_key"], plan["price"], order_id, item_name,
+                )
+                method = charge.get("method", "card")
+        except (toss_client.TossError, kakaopay_client.KakaoPayError) as e:
             print(f"[정기결제 실패] user_id={sub['user_id']} plan={sub['plan']}: {e}")
             db.mark_subscription_past_due(sub["id"])
             db.log_payment(sub["user_id"], sub["id"], order_id, plan["key"], plan["price"],
@@ -130,7 +143,7 @@ def run_billing_cycle():
         db.renew_subscription_with_plan(sub["id"], plan["key"], plan["price"],
                                          now.isoformat(), period_end.isoformat())
         db.log_payment(sub["user_id"], sub["id"], order_id, plan["key"], plan["price"],
-                        "paid", charge.get("method", "card"), "")
+                        "paid", method, "")
         if pending_plan_key:
             print(f"[플랜 다운그레이드 적용/결제 완료] user_id={sub['user_id']} -> {plan['key']}")
         else:

@@ -49,7 +49,7 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 from fastapi import FastAPI, Request, Form, Header, HTTPException, BackgroundTasks
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -65,6 +65,8 @@ from .data_source import naver as naver_mod
 from .data_source import upbit as upbit_mod
 from .billing import plans as billing_plans
 from .billing import toss as toss_client
+from .billing import kakaopay as kakaopay_client
+from .billing import payapp as payapp_client
 
 # 검색 데이터소스: 증권(stock)은 네이버 금융, 가상자산(crypto)은 업비트
 SEARCH_SOURCES = {"stock": naver_mod, "crypto": upbit_mod}
@@ -519,13 +521,167 @@ def billing_fail(request: Request, message: str = "결제가 취소되었거나 
     })
 
 
+# ----------------------------------------------------------------------
+# 카카오페이 정기결제 (Toss와 달리 결제창이 별도 사이트로 리디렉션되는 방식)
+# ----------------------------------------------------------------------
+@app.get("/billing/checkout/kakao")
+def billing_checkout_kakao(request: Request, plan: str = ""):
+    user = auth.current_user(request)
+    if not user:
+        next_url = quote(f"/billing/checkout/kakao?plan={plan}")
+        return RedirectResponse(url=f"/login?next={next_url}", status_code=303)
+
+    plan_info = billing_plans.get_plan(plan)
+    if plan_info["key"] == "free" or plan_info["price"] <= 0:
+        return RedirectResponse(url="/pricing", status_code=303)
+
+    if not kakaopay_client.is_configured():
+        return HTMLResponse(
+            "환경변수 KAKAO_PAY_CID / KAKAO_PAY_SECRET_KEY가 설정되어 있지 않습니다. Render 환경변수를 확인해주세요.",
+            status_code=400,
+        )
+
+    order_id = f"sub-{user['id']}-{uuid.uuid4().hex[:12]}"
+    partner_user_id = f"user-{user['id']}"
+    base = str(request.base_url).rstrip("/")
+    try:
+        ready = kakaopay_client.ready_subscription(
+            order_id, partner_user_id, f"AlphaTiming {plan_info['name']} 플랜 구독", plan_info["price"],
+            approval_url=f"{base}/billing/kakao/approve?plan={plan_info['key']}&order_id={order_id}",
+            fail_url=f"{base}/billing/fail",
+            cancel_url=f"{base}/billing/fail?message={quote('결제가 취소되었습니다')}",
+        )
+    except kakaopay_client.KakaoPayError as e:
+        return RedirectResponse(url=f"/billing/fail?message={quote(str(e))}", status_code=303)
+
+    return RedirectResponse(url=ready["next_redirect_pc_url"], status_code=303)
+
+
+@app.get("/billing/kakao/approve", response_class=HTMLResponse)
+def billing_kakao_approve(request: Request, plan: str = "", order_id: str = "", pg_token: str = ""):
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/pricing", status_code=303)
+
+    plan_info = billing_plans.get_plan(plan)
+    if not order_id or not pg_token:
+        return RedirectResponse(url=f"/billing/fail?message={quote('인증 정보가 올바르지 않습니다')}", status_code=303)
+
+    partner_user_id = f"user-{user['id']}"
+    try:
+        approved = kakaopay_client.approve_subscription(order_id, partner_user_id, pg_token)
+    except kakaopay_client.KakaoPayError as e:
+        return RedirectResponse(url=f"/billing/fail?message={quote(str(e))}", status_code=303)
+
+    sid = approved["sid"]
+    now = datetime.now()
+    period_end = now + timedelta(days=BILLING_PERIOD_DAYS)
+    sub_id = db.create_subscription(
+        user["id"], plan_info["key"], plan_info["price"], sid, partner_user_id,
+        now.isoformat(), period_end.isoformat(), provider="kakao",
+    )
+    db.log_payment(user["id"], sub_id, order_id, plan_info["key"], plan_info["price"],
+                    "paid", approved.get("payment_method_type", "card").lower(), "")
+
+    return RedirectResponse(url="/account?subscribed=1", status_code=303)
+
+
 @app.post("/billing/cancel")
 def billing_cancel(request: Request):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/account", status_code=303)
+
+    sub = db.get_active_subscription(user["id"])
+    if sub and sub.get("billing_key"):
+        try:
+            if sub.get("provider") == "kakao":
+                kakaopay_client.inactivate_subscription(sub["billing_key"])
+            elif sub.get("provider") == "payapp":
+                payapp_client.cancel_subscription(sub["billing_key"])
+        except (kakaopay_client.KakaoPayError, payapp_client.PayAppError):
+            pass  # 결제사 쪽 해지가 실패해도 우리 쪽 구독 상태는 계속 취소 처리합니다.
+
     db.cancel_subscription(user["id"])
     return RedirectResponse(url="/account?canceled=1", status_code=303)
+
+
+# ----------------------------------------------------------------------
+# PayApp 정기결제 (등록 후에는 PayApp이 스스로 주기 청구하고 feedbackurl로만 통보합니다.
+# 즉 우리 스케줄러가 직접 "청구"를 호출하지 않는, Toss/카카오페이와는 다른 방식입니다.)
+# ----------------------------------------------------------------------
+@app.get("/billing/checkout/payapp")
+def billing_checkout_payapp(request: Request, plan: str = ""):
+    user = auth.current_user(request)
+    if not user:
+        next_url = quote(f"/billing/checkout/payapp?plan={plan}")
+        return RedirectResponse(url=f"/login?next={next_url}", status_code=303)
+
+    plan_info = billing_plans.get_plan(plan)
+    if plan_info["key"] == "free" or plan_info["price"] <= 0:
+        return RedirectResponse(url="/pricing", status_code=303)
+
+    if not payapp_client.is_configured():
+        return HTMLResponse(
+            "환경변수 PAYAPP_USERID / PAYAPP_LINKKEY가 설정되어 있지 않습니다. Render 환경변수를 확인해주세요.",
+            status_code=400,
+        )
+    if not user.get("phone"):
+        return RedirectResponse(url="/account?error=" + quote("PayApp 결제는 휴대전화번호 등록이 필요합니다."), status_code=303)
+
+    base = str(request.base_url).rstrip("/")
+    expire_date = (datetime.now() + timedelta(days=365 * 5)).strftime("%Y-%m-%d")
+    try:
+        registered = payapp_client.register_subscription(
+            f"AlphaTiming {plan_info['name']} 플랜 구독", plan_info["price"], user["phone"],
+            cycle_day=datetime.now().day,
+            expire_date=expire_date,
+            feedbackurl=f"{base}/billing/payapp/feedback",
+            failurl=f"{base}/billing/fail",
+            var1=str(user["id"]), var2=plan_info["key"],
+        )
+    except payapp_client.PayAppError as e:
+        return RedirectResponse(url=f"/billing/fail?message={quote(str(e))}", status_code=303)
+
+    return RedirectResponse(url=registered["payurl"], status_code=303)
+
+
+@app.post("/billing/payapp/feedback")
+async def billing_payapp_feedback(request: Request):
+    form = await request.form()
+    data = dict(form)
+
+    if data.get("linkval") != payapp_client.linkval():
+        return PlainTextResponse("FAIL", status_code=400)
+    if data.get("pay_state") != "4":  # 결제완료(4)가 아니면(요청/취소 등) 무시
+        return PlainTextResponse("SUCCESS")
+
+    rebill_no = data.get("rebill_no")
+    if not rebill_no:
+        return PlainTextResponse("SUCCESS")  # 정기결제 건이 아니면 이 흐름에서는 처리하지 않음
+
+    now = datetime.now()
+    period_end = now + timedelta(days=BILLING_PERIOD_DAYS)
+    mul_no = data.get("mul_no", "")
+    existing = db.get_subscription_by_billing_key(rebill_no)
+
+    if existing:
+        db.renew_subscription(existing["id"], now.isoformat(), period_end.isoformat())
+        db.log_payment(existing["user_id"], existing["id"], mul_no, existing["plan"],
+                        int(data.get("price", existing["price"])), "paid", "card", "")
+    else:
+        var1, var2 = data.get("var1", ""), data.get("var2", "")
+        plan_info = billing_plans.get_plan(var2) if var2 else None
+        if not var1.isdigit() or not plan_info:
+            return PlainTextResponse("SUCCESS")
+        user_id = int(var1)
+        sub_id = db.create_subscription(
+            user_id, plan_info["key"], plan_info["price"], rebill_no, f"user-{user_id}",
+            now.isoformat(), period_end.isoformat(), provider="payapp",
+        )
+        db.log_payment(user_id, sub_id, mul_no, plan_info["key"], plan_info["price"], "paid", "card", "")
+
+    return PlainTextResponse("SUCCESS")
 
 
 @app.post("/billing/downgrade")

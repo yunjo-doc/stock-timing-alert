@@ -43,6 +43,13 @@ def load_config() -> dict:
     cfg["toss"]["client_key"] = os.getenv("TOSS_CLIENT_KEY", "")
     cfg["toss"]["secret_key_set"] = bool(os.getenv("TOSS_SECRET_KEY"))
 
+    # 카카오페이 정기결제 연동 키. "kakao"(카카오 로그인)와는 별개 자격증명이라 네임스페이스를 분리합니다.
+    cfg.setdefault("kakaopay", {})
+    cfg["kakaopay"]["cid"] = os.getenv("KAKAO_PAY_CID", "")
+    cfg["kakaopay"]["secret_key_set"] = bool(
+        os.getenv("KAKAO_PAY_SECRET_KEY") or os.getenv("KAKAO_PAY_DEV_SECRET_KEY")
+    )
+
     return cfg
 
 

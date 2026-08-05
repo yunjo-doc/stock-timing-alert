@@ -73,11 +73,13 @@
           {{ subscription.current_period_end[:10] if subscription and subscription.current_period_end else '다음 결제일' }}부터 적용 예정
         </button>
       {% elif not user %}
-        <a class="pbtn" href="{{ '/signup' if p.price == 0 else ('/billing/checkout?plan=' ~ p.key) }}">
-          {{ '무료로 시작' if p.price == 0 else '구독하기' }}
-        </a>
+        {% if p.price == 0 %}
+        <a class="pbtn" href="/signup">무료로 시작</a>
+        {% else %}
+        <a class="pbtn" href="/billing/checkout/payapp?plan={{ p.key }}">구독하기</a>
+        {% endif %}
       {% elif p_index > current_index %}
-        <a class="pbtn" href="/billing/checkout?plan={{ p.key }}">구독하기</a>
+        <a class="pbtn" href="/billing/checkout/payapp?plan={{ p.key }}">구독하기</a>
       {% else %}
         {% set next_billing = subscription.current_period_end[:10] if subscription and subscription.current_period_end else '다음 결제일' %}
         {% set price_label = '{:,}'.format(p.price) %}
@@ -93,7 +95,7 @@
   </div>
 
   <div class="footer-note">
-    결제는 Toss Payments 정기결제(빌링)로 처리되며, 등록한 카드로 매월 자동 청구됩니다.
+    결제는 PayApp 정기결제로 처리되며, 등록한 카드로 매월 자동 청구됩니다.
     상위 플랜으로 업그레이드하면 즉시 결제되어 적용되고, 하위 플랜으로 변경하면 현재 결제 주기가 끝나는 날(다음 결제일)까지는
     기존 플랜을 그대로 이용하며 그 날짜에 하위 플랜 금액이 청구됩니다.
     구독 해지는 <a href="/account" style="color:var(--secondary)">내 계정</a> 페이지에서 언제든 가능합니다.
