@@ -373,13 +373,16 @@ def get_latest_signals_for_dashboard():
 def get_recent_signals_for_codes(codes: list, limit: int = 30):
     """관심종목들의 분석 이력을 최신순으로 반환 (신호가 갱신될 때마다 계속 쌓이는 피드용).
     최신 1건만 보여주는 get_latest_signals_for_dashboard()와 달리, 이전 분석 결과도
-    사라지지 않고 오래된 순서로 계속 아래에 남아있습니다."""
+    사라지지 않고 오래된 순서로 계속 아래에 남아있습니다.
+    30분마다 돌아가는 자동 분석이 매번 행을 남기다 보니 HOLD가 대부분을 차지해 피드가
+    묻히는 문제가 있어, 매수/매도 신호가 있었던 건 위주로 보여줍니다."""
     if not codes:
         return []
     placeholders = ",".join("?" for _ in codes)
     with get_conn() as conn:
         rows = conn.execute(
-            f"SELECT * FROM signals WHERE code IN ({placeholders}) ORDER BY id DESC LIMIT ?",
+            f"SELECT * FROM signals WHERE code IN ({placeholders}) AND signal != 'HOLD' "
+            "ORDER BY id DESC LIMIT ?",
             list(codes) + [limit],
         ).fetchall()
         return [dict(r) for r in rows]

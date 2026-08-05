@@ -191,6 +191,8 @@
         </div>
         <span class="feed-time">{{ f.created_at[:16] }}</span>
       </div>
+      {% else %}
+      <div class="sd-empty" style="padding:20px 0; text-align:center;">아직 매수/매도 신호가 없습니다. 관심종목이 모두 관망(HOLD) 상태입니다.</div>
       {% endfor %}
     </div>
     {% if analysis_feed|length > 3 %}
