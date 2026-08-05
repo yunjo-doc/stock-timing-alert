@@ -69,11 +69,18 @@ SITE_URL = "https://alphaone.ai.kr"
 def _send_kakao_memo(access_token: str, text: str) -> bool:
     # 모든 메시지 종류(전환 알림/일일 요약/테스트)에 공통으로 사이트 링크를 붙여서,
     # 메시지를 눌렀을 때 바로 alphaone.ai.kr로 들어올 수 있게 합니다.
+    # button_title만으로는 버튼이 노출되지 않는 사례가 있어(카카오 문서상으로도 buttons가
+    # 지정되면 그쪽이 우선 적용됨), buttons 배열로 명시적으로 지정합니다.
     template = {
         "object_type": "text",
         "text": text[:200],
         "link": {"web_url": SITE_URL, "mobile_web_url": SITE_URL},
-        "button_title": "AlphaTiming 바로가기",
+        "buttons": [
+            {
+                "title": "AlphaTiming 바로가기",
+                "link": {"web_url": SITE_URL, "mobile_web_url": SITE_URL},
+            }
+        ],
     }
     resp = requests.post(
         KAKAO_SEND_URL,
