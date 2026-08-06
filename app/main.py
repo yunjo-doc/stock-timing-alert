@@ -173,7 +173,10 @@ def _market_snapshot_context():
 def dashboard(request: Request, market: str = "stock"):
     user = auth.current_user(request)
     if not user:
-        return RedirectResponse(url="/login?next=/", status_code=303)
+        return templates.TemplateResponse(request, "landing.html", {
+            **_market_snapshot_context(),
+            "plans": [billing_plans.get_plan(k) for k in billing_plans.PLAN_ORDER],
+        })
     if auth.needs_profile_completion(user):
         return RedirectResponse(url="/complete-profile", status_code=303)
     market = market if market in ("stock", "crypto") else "stock"

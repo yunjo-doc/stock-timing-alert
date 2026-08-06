@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AlphaTiming — AI 기반 투자 타이밍 분석</title>
+<meta name="description" content="확률분포·시장온도·추세·펀더멘털·리스크 5대 지표를 AI가 종합해 매수·매도 타이밍을 알려드립니다. 관심종목을 등록하고 무료로 시작하세요.">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" type="image/png" href="/static/logo.png">
+<style>
+.lp-hero {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 18px;
+  padding: 54px 4px 40px; max-width: 720px;
+}
+.lp-eyebrow {
+  display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono);
+  font-size: 12px; color: var(--secondary); background: var(--secondary-dim);
+  padding: 5px 12px; border-radius: 999px;
+}
+.lp-hero h1 { font-size: 34px; line-height: 1.3; margin: 0; letter-spacing: -0.01em; }
+.lp-hero h1 em { font-style: normal; color: var(--secondary); }
+.lp-hero p.lead { font-size: 15px; color: var(--muted); line-height: 1.7; margin: 0; }
+.lp-cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.lp-cta button.ghost { background: transparent; border: 1px solid var(--line-strong); color: var(--text); }
+.lp-cta button { padding: 12px 22px; font-size: 14px; }
+.lp-fineprint { font-size: 11.5px; color: var(--muted-2); margin-top: -6px; }
+
+.lp-ticker { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 20px; font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+.lp-ticker b { color: var(--text); }
+.lp-ticker .up { color: var(--accent); }
+.lp-ticker .down { color: var(--danger); }
+.lp-ticker .live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; box-shadow: 0 0 0 3px var(--accent-dim); }
+
+.lp-features { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+.lp-feature { padding: 20px 18px; }
+.lp-feature .icon { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 16px; margin-bottom: 12px; }
+.lp-feature h3 { font-size: 14px; margin: 0 0 6px; }
+.lp-feature p { font-size: 12px; color: var(--muted); line-height: 1.6; margin: 0; }
+
+.lp-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.lp-step { padding: 24px 22px; position: relative; }
+.lp-step .num { font-family: var(--font-mono); font-size: 12px; color: var(--muted-2); margin-bottom: 10px; }
+.lp-step h3 { font-size: 15.5px; margin: 0 0 8px; }
+.lp-step p { font-size: 12.5px; color: var(--muted); line-height: 1.7; margin: 0; }
+
+.lp-plan-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.lp-plan { padding: 20px; text-align: center; }
+.lp-plan .name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.lp-plan .price { font-family: var(--font-mono); font-size: 20px; font-weight: 700; }
+.lp-plan .price span { font-size: 11px; color: var(--muted); font-weight: 400; }
+.lp-plan .limit { font-size: 11.5px; color: var(--secondary); margin-top: 6px; }
+
+.lp-final { text-align: center; padding: 54px 20px; }
+.lp-final h2 { font-size: 24px; margin: 0 0 10px; }
+.lp-final p { font-size: 13.5px; color: var(--muted); margin: 0 0 22px; }
+
+.lp-footer { text-align: center; padding: 30px 20px 50px; font-size: 11.5px; color: var(--muted-2); }
+.lp-footer a { color: var(--muted); }
+
+@media (max-width: 1080px) {
+  .lp-features { grid-template-columns: repeat(3, 1fr); }
+  .lp-plan-strip { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+  .lp-hero h1 { font-size: 26px; }
+  .lp-features { grid-template-columns: 1fr 1fr; }
+  .lp-steps { grid-template-columns: 1fr; }
+  .lp-plan-strip { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" class="brand">
+    <img src="/static/logo.png" alt="AlphaTiming" class="brand-logo">
+    <h1>AlphaTiming</h1>
+  </a>
+  <button class="nav-toggle" onclick="this.nextElementSibling.classList.toggle('open')">☰</button>
+  <nav>
+    <a href="#features">핵심 지표</a>
+    <a href="#how">이용 방법</a>
+    <a href="/pricing">요금제</a>
+    <a href="/login">로그인</a>
+  </nav>
+</div>
+
+<div class="wrap">
+
+  <div class="lp-hero fade-in">
+    <span class="lp-eyebrow">AI 투자 타이밍 분석</span>
+    <h1>감이 아니라 데이터로,<br><em>매수·매도 타이밍</em>을 계산합니다.</h1>
+    <p class="lead">
+      확률분포 · 시장온도 · 추세 · 펀더멘털 · 리스크, 5가지 지표를 AI가 종합해
+      관심종목의 BUY/SELL/HOLD 신호를 실시간으로 보여드립니다.
+    </p>
+    <div class="lp-cta">
+      <a href="/signup"><button type="button">무료로 시작하기</button></a>
+      <a href="/pricing"><button type="button" class="ghost">요금제 보기</button></a>
+    </div>
+    <div class="lp-fineprint">신용카드 등록 없이 무료 플랜(관심종목 1개)으로 바로 시작할 수 있습니다.</div>
+
+    {% if market_indices or usd_prices %}
+    <div class="lp-ticker">
+      <span><span class="live-dot"></span>실시간 시세</span>
+      {% if market_indices and market_indices.KOSPI %}
+      <span>KOSPI <b>{{ '{:,.2f}'.format(market_indices.KOSPI.value) }}</b>
+        <span class="{{ 'up' if market_indices.KOSPI.up else 'down' }}">{{ '▲' if market_indices.KOSPI.up else '▼' }}{{ '%.2f'|format(market_indices.KOSPI.change_pct) }}%</span></span>
+      {% endif %}
+      {% if market_indices and market_indices.KOSDAQ %}
+      <span>KOSDAQ <b>{{ '{:,.2f}'.format(market_indices.KOSDAQ.value) }}</b>
+        <span class="{{ 'up' if market_indices.KOSDAQ.up else 'down' }}">{{ '▲' if market_indices.KOSDAQ.up else '▼' }}{{ '%.2f'|format(market_indices.KOSDAQ.change_pct) }}%</span></span>
+      {% endif %}
+      {% if usd_prices and usd_prices.BTC and usd_prices.BTC.value is not none %}
+      <span>BTC/USD <b>{{ '{:,.0f}'.format(usd_prices.BTC.value) }}</b>
+        <span class="{{ 'up' if usd_prices.BTC.change_pct >= 0 else 'down' }}">{{ '▲' if usd_prices.BTC.change_pct >= 0 else '▼' }}{{ '%.2f'|format(usd_prices.BTC.change_pct) }}%</span></span>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="section-title" id="features"><span class="n">01</span> 5대 핵심 지표</div>
+  <div class="lp-features">
+    <div class="glass lp-feature fade-in">
+      <div class="icon" style="background:var(--secondary-dim); color:var(--secondary);">📊</div>
+      <h3>확률분포</h3>
+      <p>정규분포로 현재 가격이 평균에서 얼마나 벗어났는지 확인해 과열·침체를 판단합니다.</p>
+    </div>
+    <div class="glass lp-feature fade-in" style="animation-delay:.05s">
+      <div class="icon" style="background:var(--warning-dim); color:var(--warning);">☀</div>
+      <h3>시장온도</h3>
+      <p>거래량과 변동성을 결합해 시장 과열도를 0~100으로 나타냅니다.</p>
+    </div>
+    <div class="glass lp-feature fade-in" style="animation-delay:.1s">
+      <div class="icon" style="background:var(--accent-dim); color:var(--accent);">📈</div>
+      <h3>추세</h3>
+      <p>단기·중기·장기 이동평균 배열로 상승/하락 방향성을 판단합니다.</p>
+    </div>
+    <div class="glass lp-feature fade-in" style="animation-delay:.15s">
+      <div class="icon" style="background:var(--secondary-dim); color:var(--secondary);">🏛</div>
+      <h3>펀더멘털</h3>
+      <p>PER·PBR·ROE 등 기업 가치 지표로 지금 주가가 비싼지 싼지 확인합니다.</p>
+    </div>
+    <div class="glass lp-feature fade-in" style="animation-delay:.2s">
+      <div class="icon" style="background:var(--danger-dim); color:var(--danger);">⚠</div>
+      <h3>리스크</h3>
+      <p>손절가·목표가 폭과 변동성을 반영해 종목별 위험도를 계산합니다.</p>
+    </div>
+  </div>
+
+  <div class="section-title" id="how"><span class="n">02</span> 이용 방법</div>
+  <div class="lp-steps">
+    <div class="glass lp-step fade-in">
+      <div class="num">STEP 1</div>
+      <h3>관심종목 등록</h3>
+      <p>국내 주식·가상자산 중 관심 있는 종목을 관심종목에 추가합니다. 무료 플랜은 1개부터 시작할 수 있습니다.</p>
+    </div>
+    <div class="glass lp-step fade-in" style="animation-delay:.05s">
+      <div class="num">STEP 2</div>
+      <h3>AI가 5대 지표 분석</h3>
+      <p>설정한 주기마다 AI가 확률분포·시장온도·추세·펀더멘털·리스크를 종합해 신뢰도와 함께 판단을 내립니다.</p>
+    </div>
+    <div class="glass lp-step fade-in" style="animation-delay:.1s">
+      <div class="num">STEP 3</div>
+      <h3>BUY/SELL/HOLD 신호 확인</h3>
+      <p>대시보드와 알림에서 목표가·손절가와 함께 매수/매도/관망 신호를 바로 확인할 수 있습니다.</p>
+    </div>
+  </div>
+
+  <div class="section-title"><span class="n">03</span> 요금제</div>
+  <div class="lp-plan-strip">
+    {% for p in plans %}
+    <div class="glass lp-plan fade-in" style="animation-delay:{{ loop.index0 * 0.05 }}s">
+      <div class="name">{{ p.name }}</div>
+      <div class="price">{{ '{:,}'.format(p.price) }}<span>원/월</span></div>
+      <div class="limit">관심종목 {{ '무제한' if p.stock_limit is none else (p.stock_limit ~ '개') }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="footer-note" style="text-align:center; border-top:none;">
+    <a href="/pricing" style="color:var(--secondary); text-decoration:none;">전체 요금제 자세히 보기 →</a>
+  </div>
+
+  <div class="glass lp-final fade-in" style="margin-top:40px;">
+    <h2>지금 무료로 시작해보세요</h2>
+    <p>가입 후 바로 관심종목을 등록하고 첫 분석 결과를 확인할 수 있습니다.</p>
+    <a href="/signup"><button type="button">무료로 시작하기</button></a>
+  </div>
+
+  <div class="footer-note">
+    본 플랫폼에서 제공하는 모든 정보는 투자 참고 자료이며, 특정 금융상품의 매수·매도를
+    권유하거나 보장하는 것이 아닙니다. 실제 주가는 정규분포보다 꼬리가 두꺼운(fat-tail) 경우가 많으며,
+    모든 투자 및 매매에 대한 최종 판단과 그에 따른 책임은 전적으로 투자자 본인에게 있습니다.
+  </div>
+</div>
+
+<div class="lp-footer">
+  AlphaTiming · <a href="/login">로그인</a> · <a href="/signup">회원가입</a> · 이용약관 · 개인정보처리방침
+</div>
+
+</body>
+</html>
