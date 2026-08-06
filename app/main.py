@@ -385,6 +385,55 @@ def kakao_login_callback(request: Request, code: str = ""):
 
 
 # ----------------------------------------------------------------------
+# 카카오 계정 연결 (이메일로 가입한 기존 계정에 카카오 로그인을 추가로 연결.
+# 위 /auth/kakao/login 은 "가입/로그인"용이라 새 계정을 만들지만, 이건 지금
+# 로그인되어 있는 계정에 kakao_id만 붙여서 다음부터 그 계정으로 카카오 로그인이
+# 되게 합니다. 카카오 개발자 콘솔의 Redirect URI 목록에 이 콜백 주소도 등록해야 합니다.)
+# ----------------------------------------------------------------------
+@app.get("/account/kakao/link")
+def kakao_link_start(request: Request):
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/account", status_code=303)
+
+    cfg = load_config()
+    rest_api_key = cfg["kakao"].get("rest_api_key")
+    if not rest_api_key:
+        return HTMLResponse("환경변수 KAKAO_REST_API_KEY가 설정되어 있지 않습니다.", status_code=400)
+
+    redirect_uri = str(request.base_url).rstrip("/") + "/account/kakao/link/callback"
+    url = kakao_mod.get_authorize_url(rest_api_key, redirect_uri, scope="profile_nickname")
+    return RedirectResponse(url)
+
+
+@app.get("/account/kakao/link/callback", response_class=HTMLResponse)
+def kakao_link_callback(request: Request, code: str = ""):
+    user = auth.current_user(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/account", status_code=303)
+
+    cfg = load_config()
+    rest_api_key = cfg["kakao"].get("rest_api_key")
+    redirect_uri = str(request.base_url).rstrip("/") + "/account/kakao/link/callback"
+
+    try:
+        token_data = kakao_mod.exchange_code_for_token(rest_api_key, code, redirect_uri, cfg["kakao"].get("client_secret", ""))
+        profile = kakao_mod.get_user_profile(token_data["access_token"])
+    except Exception as e:
+        return RedirectResponse(url=f"/account?error={quote('카카오 계정 연결에 실패했습니다: ' + str(e))}", status_code=303)
+
+    kakao_id = str(profile.get("id"))
+    existing = db.get_user_by_kakao_id(kakao_id)
+    if existing and existing["id"] != user["id"]:
+        return RedirectResponse(
+            url=f"/account?error={quote('이미 다른 계정에 연결된 카카오 계정입니다.')}", status_code=303
+        )
+
+    db.link_kakao_id(user["id"], kakao_id)
+    return RedirectResponse(url="/account?kakao_linked=1", status_code=303)
+
+
+# ----------------------------------------------------------------------
 # 추가 정보 입력 (카카오 최초 가입 시 이름/전화번호가 비어있는 경우 강제로 받습니다)
 # ----------------------------------------------------------------------
 @app.get("/complete-profile", response_class=HTMLResponse)
@@ -415,7 +464,7 @@ def complete_profile_submit(request: Request, name: str = Form(...), phone: str 
 # ----------------------------------------------------------------------
 @app.get("/account", response_class=HTMLResponse)
 def account_page(request: Request, subscribed: int = 0, canceled: int = 0, downgrade_scheduled: int = 0,
-                  test_sent: int = 0, test_failed: int = 0, error: str = ""):
+                  test_sent: int = 0, test_failed: int = 0, kakao_linked: int = 0, error: str = ""):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/account", status_code=303)
@@ -428,7 +477,7 @@ def account_page(request: Request, subscribed: int = 0, canceled: int = 0, downg
         "user": user, "plan": plan, "subscription": subscription, "payments": payments,
         "pending_plan": pending_plan,
         "subscribed": subscribed, "canceled": canceled, "downgrade_scheduled": downgrade_scheduled,
-        "test_sent": test_sent, "test_failed": test_failed, "error": error,
+        "test_sent": test_sent, "test_failed": test_failed, "kakao_linked": kakao_linked, "error": error,
     })
 
 

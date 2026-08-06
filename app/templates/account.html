@@ -52,6 +52,11 @@
     테스트 알림 전송에 실패했습니다. 카카오 연동 상태를 확인해주세요.
   </div>
   {% endif %}
+  {% if kakao_linked %}
+  <div class="glass panel fade-in" style="border-color:var(--accent); margin-bottom:16px; padding:14px 18px; font-size:13px; color:var(--accent);">
+    카카오 계정이 연결되었습니다. 다음부터 카카오 버튼으로 바로 로그인할 수 있어요.
+  </div>
+  {% endif %}
   {% if error %}
   <div class="glass panel fade-in" style="border-color:var(--danger); margin-bottom:16px; padding:14px 18px; font-size:13px; color:var(--danger);">
     {{ error }}
@@ -61,7 +66,7 @@
   <div class="glass panel fade-in">
     <div style="font-size:13px; color:var(--muted); margin-bottom:4px;">이메일</div>
     <div style="font-size:15px; font-weight:600; margin-bottom:22px;">
-      {{ '카카오 계정으로 로그인' if user.kakao_id else user.email }}
+      {{ '카카오 계정으로 가입' if user.email.endswith('@kakao.local') else user.email }}
     </div>
 
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
@@ -107,6 +112,27 @@
         </tbody>
       </table>
     </div>
+    {% endif %}
+  </div>
+
+  <div class="glass panel fade-in" style="margin-top:20px">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+      <div style="font-size:14px; font-weight:600;">카카오 로그인 연결</div>
+      {% if user.kakao_id %}
+      <span class="chip buy">연결됨</span>
+      {% else %}
+      <span class="chip hold">미연결</span>
+      {% endif %}
+    </div>
+    {% if user.kakao_id %}
+    <div style="font-size:12.5px; color:var(--muted);">
+      카카오 계정으로도 로그인할 수 있습니다.
+    </div>
+    {% else %}
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:16px;">
+      연결하면 다음부터 이메일/비밀번호 없이 카카오 버튼 한 번으로 로그인할 수 있어요.
+    </div>
+    <a href="/account/kakao/link"><button type="button">카카오 계정 연결하기</button></a>
     {% endif %}
   </div>
 

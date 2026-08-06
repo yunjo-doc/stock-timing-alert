@@ -273,6 +273,13 @@ def get_user_by_kakao_id(kakao_id: str):
         return dict(row) if row else None
 
 
+def link_kakao_id(user_id: int, kakao_id: str):
+    """이메일로 가입한 기존 계정에 카카오 로그인을 추가로 연결합니다."""
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET kakao_id=? WHERE id=?", (str(kakao_id), user_id))
+        conn.commit()
+
+
 def create_user_from_kakao(kakao_id: str):
     """카카오 로그인 전용 계정 생성 (이메일/비밀번호 로그인은 사용하지 않는 임의 값으로 채움)"""
     salt = secrets.token_hex(16)
