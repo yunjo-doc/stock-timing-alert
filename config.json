@@ -19,7 +19,7 @@
   "probability": {
     "oversold_z": -2.0,
     "overbought_z": 2.0,
-    "extreme_z": 3.0,
+    "extreme_z": 2.0,
     "bollinger_window": 20,
     "bollinger_k": 2.0
   },
