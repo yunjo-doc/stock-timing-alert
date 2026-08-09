@@ -6,7 +6,7 @@
 - 맥스웰-볼츠만 형태의 비대칭 분포 SVG 경로 생성 (시장온도 마커 포함)
 - 관심종목 전체를 요약하는 '시장 요약 카드' 통계
 - 가장 신호가 강한 종목을 골라 '타이밍 분석 / 시그널 타임라인 / AI 분석' 패널에 사용
-- 국내 증권 시장(KRX) 정규장 개장 여부 판단 (가상자산은 24시간 시장이라 해당 없음)
+- 국내/해외 증권 시장 정규장 개장 여부 판단 (가상자산은 24시간 시장이라 해당 없음)
 """
 
 import math
@@ -14,6 +14,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 KST = ZoneInfo("Asia/Seoul")
+US_EASTERN = ZoneInfo("America/New_York")
 
 # 정규장 시간 09:00~15:30 (KST). 공휴일 캘린더는 별도로 관리하지 않아, 주중 09:00~15:30을
 # 벗어난 시간대(저녁/새벽/주말)만 "휴장"으로 판단합니다. 설/추석 등 평일 공휴일은
@@ -24,6 +25,19 @@ def is_kr_market_open(now: datetime | None = None) -> bool:
         return False
     open_minutes = 9 * 60
     close_minutes = 15 * 60 + 30
+    now_minutes = now.hour * 60 + now.minute
+    return open_minutes <= now_minutes < close_minutes
+
+
+# 뉴욕증권거래소/나스닥 정규장 09:30~16:00 (America/New_York 로컬시간). zoneinfo가
+# 서머타임(EDT/EST) 전환을 자동으로 반영해주므로 한국시간 기준 계산은 따로 하지
+# 않습니다. 미국 공휴일(추수감사절 등) 캘린더는 별도로 관리하지 않습니다.
+def is_us_market_open(now: datetime | None = None) -> bool:
+    now = (now or datetime.now(US_EASTERN)).astimezone(US_EASTERN)
+    if now.weekday() >= 5:
+        return False
+    open_minutes = 9 * 60 + 30
+    close_minutes = 16 * 60
     now_minutes = now.hour * 60 + now.minute
     return open_minutes <= now_minutes < close_minutes
 
@@ -165,13 +179,27 @@ def format_price(value):
     return f"{value:.8f}".rstrip("0").rstrip(".")
 
 
-def build_signal_timeline(stock: dict):
+def format_market_price(value, market: str):
+    """market에 맞는 통화 표기까지 포함한 가격 문자열. 해외증권(us_stock)은 달러 표기(센트
+    단위까지), 국내증권/가상자산은 기존과 동일하게 원화 표기(정수)로 보여줍니다."""
+    if value is None:
+        return "—"
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    if market == "us_stock":
+        return f"${value:,.2f}"
+    return f"{format_price(value)}원"
+
+
+def build_signal_timeline(stock: dict, market: str = "stock"):
     """featured 종목 하나에 대한 5단계 시그널 타임라인 상태"""
     if not stock:
         return []
 
     steps = [
-        {"label": "시가 형성", "detail": f"{format_price(stock.get('current_price'))}원", "state": "done"},
+        {"label": "시가 형성", "detail": format_market_price(stock.get("current_price"), market), "state": "done"},
         {
             "label": "확률 신호 감지",
             "detail": f"z={stock.get('z_score')}" if stock.get("z_score") is not None else "데이터 없음",

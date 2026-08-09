@@ -1,10 +1,11 @@
-{# 증권/가상자산 선택 카드. 사용처(대시보드/Watchlist 등)에서 base_url("/" 또는 "/watchlist"),
-   market, market_indices, usd_prices 를 include 시 넘겨주면 됩니다. #}
+{# 국내증권/해외증권/가상자산 선택 카드. 사용처(대시보드/Watchlist 등)에서
+   base_url("/" 또는 "/watchlist"), market, market_indices, us_market_indices, usd_prices,
+   stock_market_open, us_market_open 을 include 시 넘겨주면 됩니다. #}
 <div class="market-card-tabs">
   <a href="{{ base_url }}?market=stock" class="market-card-tab {{ 'active' if market == 'stock' else '' }}">
     <div class="mct-icon">📈</div>
     <div class="mct-body">
-      <div class="mct-title">증권 분석{% if stock_market_open is defined and not stock_market_open %}<span class="mct-status closed">휴장 중</span>{% endif %}</div>
+      <div class="mct-title">국내증권 분석{% if stock_market_open is defined and not stock_market_open %}<span class="mct-status closed">휴장 중</span>{% endif %}</div>
       <div class="mct-sub">주요 주가 지수{% if stock_market_open is defined and not stock_market_open %} · 최근 거래일 기준{% endif %}</div>
       <div class="mct-stats">
         {% if market_indices and market_indices.KOSPI %}
@@ -18,6 +19,26 @@
         </span>
         {% endif %}
         {% if not market_indices %}<span class="na">지수 정보 준비 중</span>{% endif %}
+      </div>
+    </div>
+  </a>
+  <a href="{{ base_url }}?market=us_stock" class="market-card-tab us-stock {{ 'active' if market == 'us_stock' else '' }}">
+    <div class="mct-icon">🌎</div>
+    <div class="mct-body">
+      <div class="mct-title">해외증권 분석{% if us_market_open is defined and not us_market_open %}<span class="mct-status closed">휴장 중</span>{% endif %}</div>
+      <div class="mct-sub">주요 미국 주가 지수{% if us_market_open is defined and not us_market_open %} · 최근 거래일 기준{% endif %}</div>
+      <div class="mct-stats">
+        {% if us_market_indices and us_market_indices.SP500 %}
+        <span>S&amp;P500 <b>{{ '{:,.2f}'.format(us_market_indices.SP500.value) }}</b>
+          <span class="{{ 'up' if us_market_indices.SP500.up else 'down' }}">{{ '▲' if us_market_indices.SP500.up else '▼' }}{{ '%.2f'|format(us_market_indices.SP500.change_pct) }}%</span>
+        </span>
+        {% endif %}
+        {% if us_market_indices and us_market_indices.NASDAQ %}
+        <span>NASDAQ <b>{{ '{:,.2f}'.format(us_market_indices.NASDAQ.value) }}</b>
+          <span class="{{ 'up' if us_market_indices.NASDAQ.up else 'down' }}">{{ '▲' if us_market_indices.NASDAQ.up else '▼' }}{{ '%.2f'|format(us_market_indices.NASDAQ.change_pct) }}%</span>
+        </span>
+        {% endif %}
+        {% if not us_market_indices %}<span class="na">지수 정보 준비 중</span>{% endif %}
       </div>
     </div>
   </a>

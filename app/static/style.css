@@ -289,7 +289,8 @@ button.danger { background: transparent; color: var(--danger); border: 1px solid
 }
 
 /* 증권/가상자산 선택 카드 (대시보드, Watchlist 등 여러 페이지에서 공용) */
-.market-card-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 4px; }
+.market-card-tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 4px; }
+@media (max-width: 900px) { .market-card-tabs { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 640px) { .market-card-tabs { grid-template-columns: 1fr; } }
 .market-card-tab {
   display: flex; align-items: center; gap: 14px; text-align: left;
@@ -304,6 +305,7 @@ button.danger { background: transparent; color: var(--danger); border: 1px solid
   background: var(--secondary-dim);
 }
 .market-card-tab.crypto .mct-icon { background: var(--warning-dim); }
+.market-card-tab.us-stock .mct-icon { background: var(--accent-dim); }
 .mct-body { min-width: 0; flex: 1; }
 .mct-title { font-size: 16px; font-weight: 700; color: var(--text); display: inline-flex; align-items: center; gap: 6px; }
 .mct-status {

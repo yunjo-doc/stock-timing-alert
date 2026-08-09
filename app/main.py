@@ -62,6 +62,7 @@ from . import dashboard_utils as du
 from . import auth
 from .notify import kakao as kakao_mod
 from .data_source import naver as naver_mod
+from .data_source import naver_world as naver_world_mod
 from .data_source import upbit as upbit_mod
 from .billing import plans as billing_plans
 from .billing import toss as toss_client
@@ -69,7 +70,8 @@ from .billing import kakaopay as kakaopay_client
 from .billing import payapp as payapp_client
 
 # 검색 데이터소스: 증권(stock)은 네이버 금융, 가상자산(crypto)은 업비트
-SEARCH_SOURCES = {"stock": naver_mod, "crypto": upbit_mod}
+SEARCH_SOURCES = {"stock": naver_mod, "us_stock": naver_world_mod, "crypto": upbit_mod}
+VALID_MARKETS = ("stock", "us_stock", "crypto")
 
 BILLING_PERIOD_DAYS = 30
 RUN_NOW_COOLDOWN_SECONDS = 60
@@ -88,6 +90,7 @@ app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "de
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "app", "templates"))
 templates.env.filters["from_json"] = lambda s: __import__("json").loads(s) if s else []
 templates.env.filters["price"] = du.format_price
+templates.env.filters["market_price"] = du.format_market_price
 
 
 def _tojson_attr(obj):
@@ -156,12 +159,14 @@ def _next_analysis_run_iso():
 
 
 def _market_snapshot_context():
-    """히어로 카드(증권/가상자산 선택 탭)에 표시할 대표 지수/시세. 방문할 때마다 값이
-    바뀌지 않도록 실시간 조회가 아니라, 스케줄러가 하루 2회 갱신해둔 스냅샷을 읽습니다."""
+    """히어로 카드(국내증권/해외증권/가상자산 선택 탭)에 표시할 대표 지수/시세. 방문할 때마다
+    값이 바뀌지 않도록 실시간 조회가 아니라, 스케줄러가 하루 2회 갱신해둔 스냅샷을 읽습니다."""
     kospi_kosdaq_snapshot = db.get_market_snapshot("kospi_kosdaq")
+    us_indices_snapshot = db.get_market_snapshot("us_indices")
     usd_crypto_snapshot = db.get_market_snapshot("usd_crypto")
     return {
         "market_indices": kospi_kosdaq_snapshot["data"] if kospi_kosdaq_snapshot else None,
+        "us_market_indices": us_indices_snapshot["data"] if us_indices_snapshot else None,
         "usd_prices": usd_crypto_snapshot["data"] if usd_crypto_snapshot else None,
     }
 
@@ -176,11 +181,12 @@ def dashboard(request: Request, market: str = "stock"):
         return templates.TemplateResponse(request, "landing.html", {
             **_market_snapshot_context(),
             "stock_market_open": du.is_kr_market_open(),
+            "us_market_open": du.is_us_market_open(),
             "plans": [billing_plans.get_plan(k) for k in billing_plans.PLAN_ORDER],
         })
     if auth.needs_profile_completion(user):
         return RedirectResponse(url="/complete-profile", status_code=303)
-    market = market if market in ("stock", "crypto") else "stock"
+    market = market if market in VALID_MARKETS else "stock"
 
     cfg = load_config()
     all_signals = db.get_latest_signals_for_dashboard()
@@ -190,7 +196,7 @@ def dashboard(request: Request, market: str = "stock"):
 
     summary = du.market_summary(signals)
     featured = du.pick_featured_stock(signals)
-    timeline = du.build_signal_timeline(featured) if featured else []
+    timeline = du.build_signal_timeline(featured, market) if featured else []
 
     bell = du.bell_curve_path(featured.get("z_score") if featured else 0)
     mb_percentile = None
@@ -213,6 +219,7 @@ def dashboard(request: Request, market: str = "stock"):
         "analysis_feed": analysis_feed,
         **_market_snapshot_context(),
         "stock_market_open": du.is_kr_market_open(),
+        "us_market_open": du.is_us_market_open(),
         "base_url": "/",
         "watch_count": watch_count,
         "interval": cfg["schedule"]["interval_minutes"],
@@ -248,7 +255,7 @@ def watchlist_page(request: Request, error: str = "", market: str = "stock"):
         return RedirectResponse(url="/login?next=/watchlist", status_code=303)
     if auth.needs_profile_completion(user):
         return RedirectResponse(url="/complete-profile", status_code=303)
-    market = market if market in ("stock", "crypto") else "stock"
+    market = market if market in VALID_MARKETS else "stock"
 
     plan = billing_plans.get_plan(db.get_user_plan_key(user["id"]))
     watch_list = db.get_user_watchlist(user["id"], market=market)
@@ -259,6 +266,7 @@ def watchlist_page(request: Request, error: str = "", market: str = "stock"):
         "market": market,
         **_market_snapshot_context(),
         "stock_market_open": du.is_kr_market_open(),
+        "us_market_open": du.is_us_market_open(),
         "base_url": "/watchlist",
         "limit_label": billing_plans.stock_limit_label(plan),
         "at_limit": plan["stock_limit"] is not None and len(watch_list) >= plan["stock_limit"],
@@ -271,12 +279,12 @@ def watchlist_add(request: Request, code: str = Form(...), name: str = Form(...)
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/watchlist", status_code=303)
-    market = market if market in ("stock", "crypto") else "stock"
+    market = market if market in VALID_MARKETS else "stock"
 
     plan = billing_plans.get_plan(db.get_user_plan_key(user["id"]))
     current_count = db.count_user_watchlist(user["id"], market=market)
     if plan["stock_limit"] is not None and current_count >= plan["stock_limit"]:
-        label = "가상자산" if market == "crypto" else "증권"
+        label = {"crypto": "가상자산", "us_stock": "해외증권"}.get(market, "증권")
         msg = f"{plan['name']} 플랜은 {label} 관심종목을 최대 {plan['stock_limit']}개까지 등록할 수 있습니다. 요금제를 업그레이드해주세요."
         return RedirectResponse(url=f"/watchlist?market={market}&error={quote(msg)}", status_code=303)
 
@@ -292,7 +300,7 @@ def watchlist_remove(request: Request, code: str = Form(...), market: str = Form
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/watchlist", status_code=303)
-    market = market if market in ("stock", "crypto") else "stock"
+    market = market if market in VALID_MARKETS else "stock"
     db.remove_user_watchlist(user["id"], code, market=market)
     return RedirectResponse(url=f"/watchlist?market={market}", status_code=303)
 

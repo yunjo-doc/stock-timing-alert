@@ -4,7 +4,7 @@
 import uuid
 from datetime import datetime, timedelta
 
-from .data_source import naver, upbit
+from .data_source import naver, naver_world, upbit
 from .analysis.signal_engine import analyze_stock
 from .notify import kakao
 from . import db
@@ -13,20 +13,28 @@ from .billing import toss as toss_client
 from .billing import kakaopay as kakaopay_client
 from .billing.plans import get_plan
 
-# market별 데이터소스: 증권(stock)은 네이버 금융, 가상자산(crypto)은 업비트
-DATA_SOURCES = {"stock": naver, "crypto": upbit}
+# market별 데이터소스: 국내증권(stock)은 네이버 금융, 해외증권(us_stock)은 네이버 해외증시,
+# 가상자산(crypto)은 업비트
+DATA_SOURCES = {"stock": naver, "us_stock": naver_world, "crypto": upbit}
 
 
 def refresh_market_snapshot(cfg: dict = None):
-    """대시보드 히어로 카드(증권/가상자산 탭)에 쓰는 KOSPI·KOSDAQ 지수와 BTC·ETH 참고가를
-    하루 2회(오전/오후)만 갱신해서 DB에 저장합니다. 방문할 때마다 값이 바뀌어 보이지
-    않도록, 대시보드는 이 스냅샷만 읽고 외부 API를 직접 호출하지 않습니다."""
+    """대시보드 히어로 카드(증권/해외증권/가상자산 탭)에 쓰는 KOSPI·KOSDAQ 지수, S&P500·나스닥
+    지수, BTC·ETH 참고가를 하루 2회(오전/오후)만 갱신해서 DB에 저장합니다. 방문할 때마다
+    값이 바뀌어 보이지 않도록, 대시보드는 이 스냅샷만 읽고 외부 API를 직접 호출하지 않습니다."""
     try:
         indices = naver.get_market_indices()
         if indices:
             db.save_market_snapshot("kospi_kosdaq", indices)
     except Exception as e:
         print(f"[시장 지수 스냅샷 오류] {e}")
+
+    try:
+        us_indices = naver_world.get_market_indices()
+        if us_indices:
+            db.save_market_snapshot("us_indices", us_indices)
+    except Exception as e:
+        print(f"[해외 지수 스냅샷 오류] {e}")
 
     try:
         usd_prices = upbit.get_usd_reference_prices()
@@ -86,12 +94,16 @@ def _analyze_market(cfg: dict, market: str):
 def run_analysis_cycle(cfg: dict):
     print(f"\n===== 분석 사이클 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} =====")
     results = []
-    # 가상자산은 24시간 시장이라 항상 분석하지만, 증권은 정규장(평일 09:00~15:30 KST)이
+    # 가상자산은 24시간 시장이라 항상 분석하지만, 국내/해외 증권은 각자의 정규장 시간이
     # 아니면 휴장 중인 지난 데이터를 계속 새로 저장하는 게 의미가 없어 건너뜁니다.
     if du.is_kr_market_open():
         results += _analyze_market(cfg, "stock")
     else:
-        print("[증권 시장 휴장 - 분석 건너뜀]")
+        print("[국내 증권 시장 휴장 - 분석 건너뜀]")
+    if du.is_us_market_open():
+        results += _analyze_market(cfg, "us_stock")
+    else:
+        print("[해외 증권 시장 휴장 - 분석 건너뜀]")
     results += _analyze_market(cfg, "crypto")
     db.trim_signal_history(keep_per_code=20)  # DB 용량 최소화: 종목당 최근 20건만 유지
     print("===== 분석 사이클 종료 =====\n")

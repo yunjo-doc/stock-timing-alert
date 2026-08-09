@@ -253,7 +253,7 @@
     {% include "_market_card_tabs.html" with context %}
     <p>
       데이터 기반 AI가 확률분포·시장온도·추세·펀더멘털·리스크를 종합해
-      {{ '코인 시장의' if market == 'crypto' else '' }} 최적의 투자 시점을 분석합니다.
+      {{ '코인 시장의' if market == 'crypto' else ('해외 주식 시장의' if market == 'us_stock' else '') }} 최적의 투자 시점을 분석합니다.
     </p>
     <p class="hero-disclaimer">
       본 플랫폼에서 제공하는 모든 정보는 투자 참고 자료이며, 특정 금융상품의 매수·매도를
@@ -305,7 +305,7 @@
         <div class="feed-left">
           <span class="chip {{ f.signal|lower }}">{{ f.signal }}</span>
           <span class="feed-name">{{ f.name }} ({{ f.code }})</span>
-          <span class="feed-meta">{{ f.current_price|price }}원 · 종합점수 {{ f.final_score }}</span>
+          <span class="feed-meta">{{ f.current_price|market_price(market) }} · 종합점수 {{ f.final_score }}</span>
         </div>
         <span class="feed-time">{{ f.created_at[:16] }}</span>
       </div>
@@ -335,7 +335,7 @@
         <div class="sd-group-title">매수(BUY) 종목</div>
         {% if buy_signals %}
           {% for s in buy_signals %}
-          <div class="sd-row"><span>{{ s.name }} ({{ s.code }})</span><b>{{ s.current_price|price }}원</b></div>
+          <div class="sd-row"><span>{{ s.name }} ({{ s.code }})</span><b>{{ s.current_price|market_price(market) }}</b></div>
           {% endfor %}
         {% else %}
           <div class="sd-empty">현재 매수 신호인 종목이 없습니다.</div>
@@ -446,7 +446,7 @@
       <div class="rec-grid">
         <div class="confidence-row">
           <div class="k">현재가</div>
-          <div class="v" id="currentPriceValue" style="font-size:14px">{{ featured.current_price|price }}원</div>
+          <div class="v" id="currentPriceValue" style="font-size:14px">{{ featured.current_price|market_price(market) }}</div>
         </div>
         <div class="confidence-row">
           <div class="k">리스크</div>
@@ -454,11 +454,11 @@
         </div>
         <div class="confidence-row">
           <div class="k" id="targetLabel">{{ target_label }}</div>
-          <div class="v" id="targetValue" style="font-size:14px">{{ disp_target|price }}원</div>
+          <div class="v" id="targetValue" style="font-size:14px">{{ disp_target|market_price(market) }}</div>
         </div>
         <div class="confidence-row">
           <div class="k" id="stopLabel">{{ stop_label }}</div>
-          <div class="v" id="stopValue" style="font-size:14px">{{ disp_stop|price }}원</div>
+          <div class="v" id="stopValue" style="font-size:14px">{{ disp_stop|market_price(market) }}</div>
         </div>
       </div>
     </div>
@@ -490,8 +490,8 @@
       <div class="ai-metric"><div class="k">시장온도</div><div class="v" id="aiMetricTemp">{{ featured.market_temperature if featured.market_temperature is not none else '—' }}</div></div>
       <div class="ai-metric"><div class="k">RSI</div><div class="v" id="aiMetricRsi">{{ featured.rsi if featured.rsi is not none else '—' }}</div></div>
       <div class="ai-metric"><div class="k">추세</div><div class="v" id="aiMetricTrend" style="font-size:12px">{{ featured.trend_alignment or '—' }}</div></div>
-      <div class="ai-metric"><div class="k" id="aiMetricStopLabel">{{ stop_label }}</div><div class="v" id="aiMetricStopValue">{{ disp_stop|price }}</div></div>
-      <div class="ai-metric"><div class="k" id="aiMetricTargetLabel">{{ target_label }}</div><div class="v" id="aiMetricTargetValue">{{ disp_target|price }}</div></div>
+      <div class="ai-metric"><div class="k" id="aiMetricStopLabel">{{ stop_label }}</div><div class="v" id="aiMetricStopValue">{{ disp_stop|market_price(market) }}</div></div>
+      <div class="ai-metric"><div class="k" id="aiMetricTargetLabel">{{ target_label }}</div><div class="v" id="aiMetricTargetValue">{{ disp_target|market_price(market) }}</div></div>
     </div>
   </div>
   {% endif %}
@@ -511,7 +511,7 @@
         <tr>
           <td class="ticker">{{ s.code }}</td>
           <td class="name">{{ s.name }}</td>
-          <td class="mono">{{ s.current_price|price }}</td>
+          <td class="mono">{{ s.current_price|market_price(market) }}</td>
           <td class="mono delta {{ 'up' if (s.daily_return_pct or 0) >= 0 else 'down' }}">
             {{ '{:+.2f}'.format(s.daily_return_pct) if s.daily_return_pct is not none else '—' }}%
           </td>
@@ -640,15 +640,22 @@ function closeGuideModal() {
 
 // 분석 피드 항목 클릭 시, 아래 Timing Analysis / Signal Timeline / AI Analysis 패널을
 // 해당 항목의 분석 결과로 갱신합니다 (서버 재요청 없이 피드에 이미 담긴 데이터로 갱신).
+const CURRENT_MARKET = "{{ market }}";
+
+// 서버(dashboard_utils.format_market_price)와 동일한 규칙: 해외증권은 달러(센트 단위),
+// 나머지(국내증권/가상자산)는 원화(정수) 표기이며, 통화 표시까지 포함해 반환합니다.
 function formatPriceJs(value) {
   if (value === null || value === undefined) return '—';
   value = Number(value);
   if (Number.isNaN(value)) return '—';
-  if (Math.abs(value) >= 1) return value.toLocaleString('en-US', { maximumFractionDigits: 0 });
-  if (value === 0) return '0';
+  if (CURRENT_MARKET === 'us_stock') {
+    return '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  if (Math.abs(value) >= 1) return value.toLocaleString('en-US', { maximumFractionDigits: 0 }) + '원';
+  if (value === 0) return '0원';
   let s = value.toFixed(8);
   s = s.replace(/0+$/, '').replace(/\.$/, '');
-  return s;
+  return s + '원';
 }
 
 function normalPdf(x) { return Math.exp(-(x * x) / 2) / Math.sqrt(2 * Math.PI); }
@@ -713,7 +720,7 @@ function selectFeedSignal(el) {
   const finalScore = s.final_score || 0;
   document.getElementById('confidenceValue').textContent = (Math.abs(finalScore) * 100).toFixed(1) + '%';
   document.getElementById('confidenceBarInner').style.width = Math.round(Math.abs(finalScore) * 100) + '%';
-  document.getElementById('currentPriceValue').textContent = formatPriceJs(s.current_price) + '원';
+  document.getElementById('currentPriceValue').textContent = formatPriceJs(s.current_price);
 
   // 손절가/목표가 표시 규칙: SELL은 현재가 기준 대칭 반전, HOLD는 예상 상/하단, 그 외는 그대로
   let dispTarget = null, dispStop = null, targetLabel = '목표가', stopLabel = '손절가';
@@ -732,12 +739,12 @@ function selectFeedSignal(el) {
     }
   }
   document.getElementById('targetLabel').textContent = targetLabel;
-  document.getElementById('targetValue').textContent = formatPriceJs(dispTarget) + '원';
+  document.getElementById('targetValue').textContent = formatPriceJs(dispTarget);
   document.getElementById('stopLabel').textContent = stopLabel;
-  document.getElementById('stopValue').textContent = formatPriceJs(dispStop) + '원';
+  document.getElementById('stopValue').textContent = formatPriceJs(dispStop);
 
   const steps = [
-    { label: '시가 형성', detail: formatPriceJs(s.current_price) + '원', state: 'done' },
+    { label: '시가 형성', detail: formatPriceJs(s.current_price), state: 'done' },
     { label: '확률 신호 감지', detail: (s.z_score !== null && s.z_score !== undefined) ? `z=${s.z_score}` : '데이터 없음', state: (s.z_score !== null && s.z_score !== undefined) ? 'done' : 'pending' },
     { label: '거래 에너지 확인', detail: (s.volume_ratio !== null && s.volume_ratio !== undefined) ? `평균 대비 ${s.volume_ratio}배` : '데이터 없음', state: (s.volume_ratio !== null && s.volume_ratio !== undefined) ? 'done' : 'pending' },
     { label: '추세 확인', detail: s.trend_alignment || '데이터 없음', state: s.trend_alignment ? 'done' : 'pending' },
