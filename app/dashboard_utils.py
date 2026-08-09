@@ -6,9 +6,26 @@
 - 맥스웰-볼츠만 형태의 비대칭 분포 SVG 경로 생성 (시장온도 마커 포함)
 - 관심종목 전체를 요약하는 '시장 요약 카드' 통계
 - 가장 신호가 강한 종목을 골라 '타이밍 분석 / 시그널 타임라인 / AI 분석' 패널에 사용
+- 국내 증권 시장(KRX) 정규장 개장 여부 판단 (가상자산은 24시간 시장이라 해당 없음)
 """
 
 import math
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+KST = ZoneInfo("Asia/Seoul")
+
+# 정규장 시간 09:00~15:30 (KST). 공휴일 캘린더는 별도로 관리하지 않아, 주중 09:00~15:30을
+# 벗어난 시간대(저녁/새벽/주말)만 "휴장"으로 판단합니다. 설/추석 등 평일 공휴일은
+# 이 함수만으로는 개장으로 오판할 수 있습니다.
+def is_kr_market_open(now: datetime | None = None) -> bool:
+    now = (now or datetime.now(KST)).astimezone(KST)
+    if now.weekday() >= 5:  # 5=토, 6=일
+        return False
+    open_minutes = 9 * 60
+    close_minutes = 15 * 60 + 30
+    now_minutes = now.hour * 60 + now.minute
+    return open_minutes <= now_minutes < close_minutes
 
 
 def _normal_pdf(x):

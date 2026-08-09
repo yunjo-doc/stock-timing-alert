@@ -175,6 +175,7 @@ def dashboard(request: Request, market: str = "stock"):
     if not user:
         return templates.TemplateResponse(request, "landing.html", {
             **_market_snapshot_context(),
+            "stock_market_open": du.is_kr_market_open(),
             "plans": [billing_plans.get_plan(k) for k in billing_plans.PLAN_ORDER],
         })
     if auth.needs_profile_completion(user):
@@ -211,6 +212,7 @@ def dashboard(request: Request, market: str = "stock"):
         "recent_alerts": recent_alerts,
         "analysis_feed": analysis_feed,
         **_market_snapshot_context(),
+        "stock_market_open": du.is_kr_market_open(),
         "base_url": "/",
         "watch_count": watch_count,
         "interval": cfg["schedule"]["interval_minutes"],
@@ -256,6 +258,7 @@ def watchlist_page(request: Request, error: str = "", market: str = "stock"):
         "plan": plan,
         "market": market,
         **_market_snapshot_context(),
+        "stock_market_open": du.is_kr_market_open(),
         "base_url": "/watchlist",
         "limit_label": billing_plans.stock_limit_label(plan),
         "at_limit": plan["stock_limit"] is not None and len(watch_list) >= plan["stock_limit"],

@@ -4,8 +4,8 @@
   <a href="{{ base_url }}?market=stock" class="market-card-tab {{ 'active' if market == 'stock' else '' }}">
     <div class="mct-icon">📈</div>
     <div class="mct-body">
-      <div class="mct-title">증권 분석</div>
-      <div class="mct-sub">주요 주가 지수</div>
+      <div class="mct-title">증권 분석{% if stock_market_open is defined and not stock_market_open %}<span class="mct-status closed">휴장 중</span>{% endif %}</div>
+      <div class="mct-sub">주요 주가 지수{% if stock_market_open is defined and not stock_market_open %} · 최근 거래일 기준{% endif %}</div>
       <div class="mct-stats">
         {% if market_indices and market_indices.KOSPI %}
         <span>KOSPI <b>{{ '{:,.2f}'.format(market_indices.KOSPI.value) }}</b>

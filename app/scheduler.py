@@ -85,7 +85,14 @@ def _analyze_market(cfg: dict, market: str):
 
 def run_analysis_cycle(cfg: dict):
     print(f"\n===== 분석 사이클 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} =====")
-    results = _analyze_market(cfg, "stock") + _analyze_market(cfg, "crypto")
+    results = []
+    # 가상자산은 24시간 시장이라 항상 분석하지만, 증권은 정규장(평일 09:00~15:30 KST)이
+    # 아니면 휴장 중인 지난 데이터를 계속 새로 저장하는 게 의미가 없어 건너뜁니다.
+    if du.is_kr_market_open():
+        results += _analyze_market(cfg, "stock")
+    else:
+        print("[증권 시장 휴장 - 분석 건너뜀]")
+    results += _analyze_market(cfg, "crypto")
     db.trim_signal_history(keep_per_code=20)  # DB 용량 최소화: 종목당 최근 20건만 유지
     print("===== 분석 사이클 종료 =====\n")
     return results
