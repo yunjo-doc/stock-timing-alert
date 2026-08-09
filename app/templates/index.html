@@ -101,7 +101,10 @@
 .feed-item.selected { background: var(--secondary-dim); border-left-width: 5px; }
 .feed-item.buy { border-left-color: var(--accent); }
 .feed-item.sell { border-left-color: var(--danger); }
-.feed-item.hold { border-left-color: var(--warning); }
+.feed-item.hold { border-left-color: var(--line-strong); padding: 9px 18px; opacity: .6; }
+.feed-item.hold .feed-name { font-size: 12px; font-weight: 500; }
+.feed-item.hold .chip { font-size: 10px; padding: 2px 7px; }
+.feed-item.hold:hover { opacity: 1; }
 .feed-item .feed-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .feed-item .feed-name { font-size: 13px; font-weight: 600; }
 .feed-item .feed-meta { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
