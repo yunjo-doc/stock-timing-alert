@@ -98,6 +98,42 @@ def _parse_sise_day(html: str):
     return rows
 
 
+def get_daily_ohlcv_fast(code: str, lookback_days: int = 120):
+    """
+    api.stock.naver.com의 국내용 차트 JSON API(1회 요청으로 전체 구간 반환)를 사용한
+    일봉 조회. sise_day.naver를 페이지네이션하는 get_daily_ohlcv()보다 훨씬 빠르지만,
+    안정성이 검증된 관심종목 분석 파이프라인에는 영향이 없도록 코스피/코스닥 대량
+    스캔(AI 추천 종목) 용도로만 사용합니다.
+    반환: [{"date","open","high","low","close","volume"}, ...] 과거->최근 순
+    """
+    try:
+        resp = requests.get(
+            f"https://api.stock.naver.com/chart/domestic/item/{code}",
+            params={"periodType": "dayCandle", "startDateTime": "", "count": lookback_days},
+            headers=HEADERS, timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except (requests.RequestException, ValueError) as e:
+        print(f"[네이버 국내 차트 API 오류] {code}: {e}")
+        return []
+
+    rows = []
+    for item in data.get("priceInfos", []):
+        try:
+            rows.append({
+                "date": item["localDate"],
+                "open": float(item["openPrice"]),
+                "high": float(item["highPrice"]),
+                "low": float(item["lowPrice"]),
+                "close": float(item["closePrice"]),
+                "volume": int(item.get("accumulatedTradingVolume") or 0),
+            })
+        except (KeyError, TypeError, ValueError):
+            continue
+    return rows
+
+
 def _get_item_name(code: str) -> str:
     """종목 코드로 종목명을 조회합니다 (검색어가 단일 종목과 정확히 일치할 때 사용).
     이 페이지는 검색 페이지(search.naver)와 달리 utf-8로 서비스됩니다."""

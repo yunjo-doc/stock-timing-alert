@@ -31,6 +31,7 @@ FastAPI 메인 앱
   POST /admin/members/{user_id}/toggle-active      회원 계정 활성/정지 토글
   POST /admin/members/{user_id}/profile             관리자가 회원 이름/전화번호 수정
   GET  /api/signals              최신 신호 JSON (외부 연동용)
+  GET  /api/ai-recommend           AI 추천 종목 TOP5 JSON (코스피/코스닥, 프로 플랜 전용)
 """
 
 import os
@@ -63,6 +64,7 @@ from . import auth
 from .notify import kakao as kakao_mod
 from .data_source import naver as naver_mod
 from .data_source import naver_world as naver_world_mod
+from . import ai_recommend
 from .data_source import upbit as upbit_mod
 from .billing import plans as billing_plans
 from .billing import toss as toss_client
@@ -803,6 +805,31 @@ def api_last_run():
 @app.get("/api/signals")
 def api_signals():
     return db.get_latest_signals_for_dashboard()
+
+
+@app.get("/api/ai-recommend")
+def api_ai_recommend(request: Request, group: str = "kospi"):
+    """AI 추천 종목(코스피/코스닥 TOP5, 프로 플랜 전용). 캐시가 1시간 넘게 지났으면
+    백그라운드에서 재스캔을 시작하고, 스캔이 끝날 때까지는 이전 캐시(있다면)와 함께
+    scanning=true를 반환합니다 - 프론트에서 주기적으로 polling해 갱신합니다."""
+    user = auth.current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    if billing_plans.get_plan(db.get_user_plan_key(user["id"]))["key"] != "pro":
+        raise HTTPException(status_code=403, detail="프로 플랜에서 이용 가능한 기능입니다.")
+
+    group_key = group.upper()
+    if group_key not in ai_recommend.GROUPS:
+        raise HTTPException(status_code=400, detail="지원하지 않는 종목군입니다.")
+
+    ai_recommend.trigger_scan_if_stale(group_key, load_config())
+    snapshot = ai_recommend.get_cached(group_key)
+    return {
+        "group": group_key,
+        "scanning": ai_recommend.is_scanning(group_key),
+        "updated_at": snapshot["updated_at"] if snapshot else None,
+        "items": snapshot["data"] if snapshot else [],
+    }
 
 
 # ----------------------------------------------------------------------
