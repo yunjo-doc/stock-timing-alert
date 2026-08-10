@@ -53,11 +53,14 @@ def _build_analysis_universe(cfg: dict, market: str):
     return list(merged.values())
 
 
-def _analyze_market(cfg: dict, market: str):
+def _analyze_stocks(market: str, stock_list: list, cfg: dict):
+    """공통 분석 루프. market의 데이터소스로 stock_list(코드/이름 목록)를 분석해 저장하고,
+    매수/매도 신호로 전환되면 알림을 보냅니다. 전체 유니버스 사이클과 개인 사용자의
+    '지금 갱신' 둘 다 이 함수를 통해 동일한 로직으로 처리됩니다."""
     data_source = DATA_SOURCES[market]
     results = []
 
-    for stock in _build_analysis_universe(cfg, market):
+    for stock in stock_list:
         code, name = stock["code"], stock["name"]
         try:
             ohlc_rows = data_source.get_daily_ohlcv(code, cfg["lookback_days"])
@@ -91,6 +94,27 @@ def _analyze_market(cfg: dict, market: str):
     return results
 
 
+def _analyze_market(cfg: dict, market: str):
+    return _analyze_stocks(market, _build_analysis_universe(cfg, market), cfg)
+
+
+def run_analysis_for_watchlist(cfg: dict, market: str, watchlist: list):
+    """개인 사용자의 '지금 갱신' 버튼 전용. 관리자 기본 종목 + 전체 회원 관심종목을 모두
+    도는 run_analysis_cycle()과 달리, 해당 사용자의 관심종목(해당 market)만 재분석합니다 -
+    누구나 누를 수 있는 개인용 버튼이 전체 회원 데이터를 재분석하는 건 과도하고, 사이클
+    전체가 끝나야 완료로 인식되는 폴링 방식과도 맞지 않기 때문입니다."""
+    if market == "stock" and not du.is_kr_market_open():
+        print("[국내 증권 시장 휴장 - 개인 갱신 건너뜀]")
+        return []
+    if market == "us_stock" and not du.is_us_market_open():
+        print("[해외 증권 시장 휴장 - 개인 갱신 건너뜀]")
+        return []
+
+    results = _analyze_stocks(market, watchlist, cfg)
+    db.save_market_snapshot("last_full_analysis", {"done": True})
+    return results
+
+
 def run_analysis_cycle(cfg: dict):
     print(f"\n===== 분석 사이클 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} =====")
     results = []
@@ -106,6 +130,10 @@ def run_analysis_cycle(cfg: dict):
         print("[해외 증권 시장 휴장 - 분석 건너뜀]")
     results += _analyze_market(cfg, "crypto")
     db.trim_signal_history(keep_per_code=20)  # DB 용량 최소화: 종목당 최근 20건만 유지
+    # "지금 갱신" 버튼의 완료 감지용 마커. signals 테이블의 MAX(created_at)은 사이클 도중
+    # 아무 종목이나 하나 저장될 때마다 계속 갱신되어(전체 종목 처리에 수 분~십수 분 걸림)
+    # "완료됐다"고 오판하게 만들므로, 사이클 전체가 끝난 시점만 별도로 기록합니다.
+    db.save_market_snapshot("last_full_analysis", {"done": True})
     print("===== 분석 사이클 종료 =====\n")
     return results
 

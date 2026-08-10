@@ -196,7 +196,7 @@ async function analyzeNow() {
   status.textContent = '분석 요청 중...';
 
   try {
-    const resp = await fetch('/run-now', { method: 'POST' });
+    const resp = await fetch('/run-now?market=' + encodeURIComponent(MARKET), { method: 'POST' });
 
     if (resp.status === 401) {
       status.textContent = '로그인이 필요합니다.';
@@ -212,7 +212,7 @@ async function analyzeNow() {
     if (!resp.ok) throw new Error('요청 실패 (' + resp.status + ')');
 
     const data = await resp.json();
-    status.textContent = '분석 진행 중... 완료되면 대시보드로 이동합니다 (최대 2분)';
+    status.textContent = '분석 진행 중... 완료되면 대시보드로 이동합니다 (관심종목 수에 따라 수 분 걸릴 수 있어요)';
     pollThenGoToDashboard(data.requested_at, btn, status);
   } catch (e) {
     status.textContent = '오류가 발생했습니다: ' + e.message;
@@ -222,7 +222,7 @@ async function analyzeNow() {
 
 function pollThenGoToDashboard(requestedAt, btn, status) {
   let attempts = 0;
-  const maxAttempts = 40; // 3초 x 40 = 최대 120초
+  const maxAttempts = 150; // 4초 x 150 = 최대 10분 (관심종목이 많은 프로 플랜 대비)
 
   const timer = setInterval(async () => {
     attempts++;
@@ -242,7 +242,7 @@ function pollThenGoToDashboard(requestedAt, btn, status) {
       status.textContent = '분석이 예상보다 오래 걸리고 있어요. 잠시 후 대시보드를 확인해보세요.';
       btn.disabled = false; btn.classList.remove('loading');
     }
-  }, 3000);
+  }, 4000);
 }
 
 // ----------------------------------------------------------------------

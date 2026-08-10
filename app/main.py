@@ -57,7 +57,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from .config import load_config, save_config, BASE_DIR
-from .scheduler import run_analysis_cycle, run_billing_cycle, refresh_market_snapshot, send_daily_digest
+from .scheduler import (run_analysis_cycle, run_analysis_for_watchlist, run_billing_cycle,
+                         refresh_market_snapshot, send_daily_digest)
 from . import db
 from . import dashboard_utils as du
 from . import auth
@@ -778,9 +779,11 @@ def billing_downgrade(request: Request, plan: str = Form(...)):
 # 수동 실행 (로그인한 회원 누구나 가능, 남용 방지를 위해 쿨다운 적용)
 # ----------------------------------------------------------------------
 @app.post("/run-now")
-def run_now(request: Request, background_tasks: BackgroundTasks, x_admin_token: str = Header(default="")):
+def run_now(request: Request, background_tasks: BackgroundTasks, market: str = "stock",
+            x_admin_token: str = Header(default="")):
     cfg = load_config()
-    if not auth.current_user(request) and not _is_admin_session(request):
+    user = auth.current_user(request)
+    if not user and not _is_admin_session(request):
         _check_admin(x_admin_token, cfg)
 
     last_run = db.get_last_analysis_time()
@@ -790,13 +793,24 @@ def run_now(request: Request, background_tasks: BackgroundTasks, x_admin_token: 
             wait = int(RUN_NOW_COOLDOWN_SECONDS - elapsed)
             raise HTTPException(status_code=429, detail=f"{wait}초 후 다시 시도해주세요.")
 
-    background_tasks.add_task(run_analysis_cycle, cfg)
+    if user:
+        # 개인 사용자 버튼이므로 전체 회원 데이터가 아니라 본인의 관심종목(해당 market)만
+        # 재분석합니다. 전체 유니버스 재분석은 스케줄러(30분 주기)와 관리자 트리거 몫입니다.
+        market = market if market in VALID_MARKETS else "stock"
+        watchlist = db.get_user_watchlist(user["id"], market=market)
+        background_tasks.add_task(run_analysis_for_watchlist, cfg, market, watchlist)
+    else:
+        background_tasks.add_task(run_analysis_cycle, cfg)
     return JSONResponse({"started": True, "requested_at": datetime.now().isoformat()})
 
 
 @app.get("/api/last-run")
 def api_last_run():
-    return {"last_run": db.get_last_analysis_time(), "next_run": _next_analysis_run_iso()}
+    """'지금 갱신' 폴링용 완료 신호. signals 테이블의 MAX(created_at)은 사이클 도중 아무
+    종목이나 하나 저장될 때마다 계속 갱신되어 조기 완료로 오판되므로, 사이클(전체 또는
+    개인 스코프) 전체가 끝난 시점에만 갱신되는 last_full_analysis 스냅샷을 사용합니다."""
+    snapshot = db.get_market_snapshot("last_full_analysis")
+    return {"last_run": snapshot["updated_at"] if snapshot else None, "next_run": _next_analysis_run_iso()}
 
 
 # ----------------------------------------------------------------------
