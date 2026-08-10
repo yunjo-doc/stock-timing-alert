@@ -38,7 +38,7 @@ import os
 import sys
 import threading
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 # 콘솔 인코딩이 UTF-8이 아닌 환경(예: Windows cp949)에서 로그에 포함된 특수문자(—, ± 등)
@@ -155,9 +155,14 @@ def _is_admin_session(request: Request) -> bool:
 
 
 def _next_analysis_run_iso():
+    """대시보드 카운트다운(JS new Date())이 서버가 어느 타임존에서 도는지와 무관하게
+    정확히 파싱하도록, UTC 오프셋을 포함한 ISO 문자열로 반환합니다. 예전에는 tzinfo를
+    지운 naive 문자열을 반환해서, 서버가 UTC로 도는 배포 환경(Render)에서는 브라우저가
+    이를 로컬시간(KST)으로 오인해 실제보다 9시간 전(=이미 지난 시각)으로 표시되는
+    문제가 있었습니다."""
     job = _scheduler.get_job("analysis_cycle")
     if job and job.next_run_time:
-        return job.next_run_time.astimezone().replace(tzinfo=None).isoformat()
+        return job.next_run_time.astimezone(timezone.utc).isoformat()
     return None
 
 
