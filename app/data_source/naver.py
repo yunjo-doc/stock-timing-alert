@@ -186,57 +186,63 @@ def search_stocks(query: str, limit: int = 15):
     return results
 
 
+INTEGRATION_URL = "https://m.stock.naver.com/api/stock/{code}/integration"
+
+
+def _parse_ratio(value) -> float:
+    """'18.59배' 같은 형식에서 숫자만 뽑아냅니다."""
+    if not value:
+        return 0.0
+    m = re.search(r"-?[\d,]+\.?\d*", str(value))
+    if not m:
+        return 0.0
+    try:
+        return float(m.group(0).replace(",", ""))
+    except ValueError:
+        return 0.0
+
+
 def get_fundamental(code: str):
     """
-    종목 메인 페이지(main.naver)에서 PER, PBR, ROE, 시가총액 등을 추출합니다.
-    네이버 페이지 구조상 정확한 라벨 매칭이 어려운 경우가 있어,
-    실패 시 0으로 채워 signal_engine 이 '중립' 처리하도록 합니다.
+    네이버 모바일 증권 API(m.stock.naver.com)에서 PER/PBR/EPS 등을 가져옵니다.
+    예전에는 종목 메인 페이지(finance.naver.com/item/main.naver)를 정적 HTML로
+    긁었는데, 이 페이지가 어느 시점부터 가격/PER/PBR 값을 자바스크립트로 나중에
+    채워 넣는 방식으로 바뀌면서 정적 스크래핑으로는 값을 전혀 읽지 못해 늘 0(=
+    "데이터 없음" 중립 처리)으로만 나오고 있었습니다. ROE는 이 API에서 별도로
+    제공되지 않아 0(데이터 없음 -> 중립 처리)으로 둡니다.
     """
-    url = f"https://finance.naver.com/item/main.naver?code={code}"
     try:
-        html = _get(url)
-    except requests.RequestException as e:
-        print(f"[네이버 크롤링 오류] {code} 기본정보: {e}")
+        resp = requests.get(INTEGRATION_URL.format(code=code), headers=HEADERS, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+    except (requests.RequestException, ValueError) as e:
+        print(f"[네이버 펀더멘털 오류] {code}: {e}")
         return {"종목명": code, "현재가": 0, "PER": 0, "PBR": 0, "ROE": 0, "EPS": 0, "시가총액": 0}
 
-    name_match = re.search(r'<title>(.*?)\s*:\s*네이버', html)
-    name = name_match.group(1).strip() if name_match else code
-
-    price_match = re.search(r'id="_nowVal">([\d,]+)</', html)
-    price = int(price_match.group(1).replace(",", "")) if price_match else 0
-
-    per = _extract_metric(html, "PER")
-    pbr = _extract_metric(html, "PBR")
-    roe = _extract_roe(html)
-    market_cap = _extract_market_cap(html)
+    name = data.get("stockName") or code
+    per = pbr = eps = price = market_cap = 0.0
+    for info in data.get("totalInfos", []):
+        code_key = info.get("code")
+        if code_key == "per":
+            per = _parse_ratio(info.get("value"))
+        elif code_key == "pbr":
+            pbr = _parse_ratio(info.get("value"))
+        elif code_key == "eps":
+            eps = _parse_ratio(info.get("value"))
+        elif code_key == "lastClosePrice":
+            price = _parse_ratio(info.get("value"))
+        elif code_key == "marketValue":
+            market_cap = _parse_ratio(info.get("value"))
 
     return {
         "종목명": name,
         "현재가": price,
         "PER": per,
         "PBR": pbr,
-        "ROE": roe,
-        "EPS": 0,  # 필요 시 추가 파싱 가능
+        "ROE": 0,
+        "EPS": eps,
         "시가총액": market_cap,
     }
-
-
-def _extract_metric(html: str, label: str) -> float:
-    # 예: <th>PER<em class="...">l</em></th> ... <td><em>15.23</em></td> 형태를 방어적으로 탐색
-    pattern = rf"{label}\s*(?:l|L)?\s*</th>\s*<td>\s*<em[^>]*>([\d,\.]+)</em>"
-    m = re.search(pattern, html)
-    if m:
-        try:
-            return float(m.group(1).replace(",", ""))
-        except ValueError:
-            return 0.0
-    return 0.0
-
-
-def _extract_roe(html: str) -> float:
-    # ROE는 페이지 하단 '기업실적분석' 표에 있어 파싱이 더 어려움 - 우선 0 처리,
-    # 필요 시 별도 API(예: 공공데이터포털 기업 재무정보)로 보강 권장
-    return 0.0
 
 
 def _parse_index_page(html: str):
@@ -275,13 +281,3 @@ def get_market_indices():
         _index_cache["fetched_at"] = now
         return result
     return _index_cache["data"]
-
-
-def _extract_market_cap(html: str) -> float:
-    m = re.search(r"시가총액</th>\s*<td>\s*<em[^>]*>([\d,]+)</em>", html)
-    if m:
-        try:
-            return float(m.group(1).replace(",", ""))
-        except ValueError:
-            return 0.0
-    return 0.0
