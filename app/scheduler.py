@@ -112,12 +112,18 @@ def run_analysis_for_watchlist(cfg: dict, market: str, watchlist: list):
     """개인 사용자의 '지금 갱신' 버튼 전용. 관리자 기본 종목 + 전체 회원 관심종목을 모두
     도는 run_analysis_cycle()과 달리, 해당 사용자의 관심종목(해당 market)만 재분석합니다 -
     누구나 누를 수 있는 개인용 버튼이 전체 회원 데이터를 재분석하는 건 과도하고, 사이클
-    전체가 끝나야 완료로 인식되는 폴링 방식과도 맞지 않기 때문입니다."""
+    전체가 끝나야 완료로 인식되는 폴링 방식과도 맞지 않기 때문입니다.
+
+    휴장 중이라 분석을 건너뛰는 경우에도 last_full_analysis 완료 마커는 반드시 갱신해야
+    합니다 - 그렇지 않으면 프론트엔드 폴링이 "완료"를 영영 감지하지 못해 매번 최대
+    대기시간(10분)을 다 채우고 타임아웃 메시지를 띄우게 됩니다 (실제로 발생했던 버그)."""
     if market == "stock" and not du.is_kr_market_open():
         print("[국내 증권 시장 휴장 - 개인 갱신 건너뜀]")
+        db.save_market_snapshot("last_full_analysis", {"done": True})
         return []
     if market == "us_stock" and not du.is_us_market_open():
         print("[해외 증권 시장 휴장 - 개인 갱신 건너뜀]")
+        db.save_market_snapshot("last_full_analysis", {"done": True})
         return []
 
     results = _analyze_stocks(market, watchlist, cfg, fast=True)
