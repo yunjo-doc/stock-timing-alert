@@ -53,17 +53,27 @@ def _build_analysis_universe(cfg: dict, market: str):
     return list(merged.values())
 
 
-def _analyze_stocks(market: str, stock_list: list, cfg: dict):
+def _analyze_stocks(market: str, stock_list: list, cfg: dict, fast: bool = False):
     """공통 분석 루프. market의 데이터소스로 stock_list(코드/이름 목록)를 분석해 저장하고,
     매수/매도 신호로 전환되면 알림을 보냅니다. 전체 유니버스 사이클과 개인 사용자의
-    '지금 갱신' 둘 다 이 함수를 통해 동일한 로직으로 처리됩니다."""
+    '지금 갱신' 둘 다 이 함수를 통해 동일한 로직으로 처리됩니다.
+
+    fast=True면(개인 '지금 갱신' 전용) 국내증권은 종목당 14번 페이지네이션하는 느린
+    sise_day.naver 대신, 1회 요청으로 끝나는 JSON API(get_daily_ohlcv_fast)를 씁니다.
+    이미 안정성이 검증된 정기 스케줄러/전체 유니버스 사이클(fast=False, 기본값)에는
+    영향이 없습니다."""
     data_source = DATA_SOURCES[market]
+    fetch_ohlcv = (
+        data_source.get_daily_ohlcv_fast
+        if fast and hasattr(data_source, "get_daily_ohlcv_fast")
+        else data_source.get_daily_ohlcv
+    )
     results = []
 
     for stock in stock_list:
         code, name = stock["code"], stock["name"]
         try:
-            ohlc_rows = data_source.get_daily_ohlcv(code, cfg["lookback_days"])
+            ohlc_rows = fetch_ohlcv(code, cfg["lookback_days"])
             fundamental_data = data_source.get_fundamental(code)
         except Exception as e:
             print(f"[에러] {name}({code}) 데이터 조회 실패: {e}")
@@ -110,7 +120,7 @@ def run_analysis_for_watchlist(cfg: dict, market: str, watchlist: list):
         print("[해외 증권 시장 휴장 - 개인 갱신 건너뜀]")
         return []
 
-    results = _analyze_stocks(market, watchlist, cfg)
+    results = _analyze_stocks(market, watchlist, cfg, fast=True)
     db.save_market_snapshot("last_full_analysis", {"done": True})
     return results
 
