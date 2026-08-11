@@ -60,7 +60,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from .config import load_config, save_config, BASE_DIR
 from .scheduler import (run_analysis_cycle, run_analysis_for_watchlist, run_billing_cycle,
-                         refresh_market_snapshot, send_daily_digest)
+                         refresh_market_snapshot, send_daily_digest,
+                         build_promo_messages, send_promo_message)
 from . import db
 from . import dashboard_utils as du
 from . import auth
@@ -134,6 +135,9 @@ def on_startup():
     # 관심종목 현재 상태(HOLD뿐이어도)를 한 번은 요약해서 보내줍니다.
     _scheduler.add_job(lambda: send_daily_digest(load_config()), "cron", hour=16, minute=0,
                         timezone="Asia/Seoul", id="daily_digest", replace_existing=True)
+    # 오픈채팅방에 붙여넣을 "오늘의 신호" 홍보 문구를 매일 장 마감 후 관리자 카카오톡으로 발송
+    _scheduler.add_job(lambda: send_promo_message(load_config()), "cron", hour=16, minute=10,
+                        timezone="Asia/Seoul", id="promo_message", replace_existing=True)
     _scheduler.start()
     # refresh_market_snapshot()은 네이버/CoinGecko로 나가는 블로킹 HTTP 호출이 있어서,
     # 여기서 동기 호출하면 그만큼 앱이 "준비 완료" 신호를 늦게 보내 배포/재시작 때마다
@@ -141,7 +145,8 @@ def on_startup():
     # 받을 수 있게 하고, 지수/시세는 조금 늦게 채워지도록 합니다.
     threading.Thread(target=refresh_market_snapshot, daemon=True).start()
     print(f"[스케줄러 시작] {interval}분 주기로 자동 분석을, 24시간 주기로 정기결제를, "
-          f"매일 09시/15시(KST)에 시장 지수 스냅샷을, 매일 16시(KST)에 일일 요약 알림을 갱신/실행합니다.")
+          f"매일 09시/15시(KST)에 시장 지수 스냅샷을, 매일 16시(KST)에 일일 요약 알림을, "
+          f"매일 16시 10분(KST)에 오픈채팅 공유 문구를 갱신/실행합니다.")
 
 
 @app.on_event("shutdown")
@@ -1043,6 +1048,32 @@ def admin_login_submit(request: Request, email: str = Form(...), password: str =
 def admin_logout(request: Request):
     request.session.pop("is_admin", None)
     return RedirectResponse(url="/admin/login", status_code=303)
+
+
+@app.get("/admin/promo", response_class=HTMLResponse)
+def admin_promo_page(request: Request, sent: str = ""):
+    """오픈채팅방에 붙여넣을 '오늘의 신호' 홍보 문구. 전문 복사 + 카카오 재발송 버튼."""
+    if not _is_admin_session(request):
+        return RedirectResponse(url="/admin/login", status_code=303)
+    msgs = build_promo_messages()
+    return templates.TemplateResponse(request, "admin_promo.html", {
+        "msgs": msgs,
+        "sent": sent,
+        "user": auth.current_user(request),
+    })
+
+
+@app.post("/admin/promo/send")
+def admin_promo_send(request: Request):
+    """'카카오로 보내기' 버튼 - 현재 로그인한 관리자 본인의 '나와의 채팅'으로 축약본 발송."""
+    if not _is_admin_session(request):
+        return RedirectResponse(url="/admin/login", status_code=303)
+    user = auth.current_user(request)
+    if not user or not user.get("kakao_access_token"):
+        return RedirectResponse(url="/admin/promo?sent=no_kakao", status_code=303)
+    msgs = build_promo_messages()
+    ok = kakao_mod.notify_user(user, "PROMO", msgs["kakao"], load_config())
+    return RedirectResponse(url=f"/admin/promo?sent={'ok' if ok else 'fail'}", status_code=303)
 
 
 @app.get("/admin/members", response_class=HTMLResponse)

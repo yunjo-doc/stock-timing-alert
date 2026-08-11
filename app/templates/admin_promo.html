@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>오늘의 공유 문구 — AlphaTiming Admin</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" type="image/png" href="/static/logo.png">
+<style>
+.promo-box { padding: 22px; }
+.promo-box h2 { font-size: 15px; margin: 0 0 6px; }
+.promo-box .hint { font-size: 12px; color: var(--muted); margin-bottom: 14px; line-height: 1.6; }
+.promo-text {
+  width: 100%; min-height: 300px; resize: vertical;
+  background: var(--bg); color: var(--text); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); padding: 14px; font-size: 13.5px; line-height: 1.8;
+  font-family: inherit; white-space: pre-wrap;
+}
+.promo-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+.promo-actions .copied { font-size: 12.5px; color: var(--accent); display: none; }
+.promo-kakao { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); white-space: pre-wrap;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/admin/members" class="brand">
+    <img src="/static/logo.png" alt="AlphaTiming" class="brand-logo">
+    <h1>AlphaTiming Admin</h1>
+  </a>
+  <button class="nav-toggle" onclick="this.nextElementSibling.classList.toggle('open')">☰</button>
+  <nav>
+    <a href="/admin/members">회원현황</a>
+    <a href="/admin/promo" class="active">공유 문구</a>
+    <a href="/">대시보드</a>
+  </nav>
+</div>
+
+<div class="wrap">
+  <div class="section-title" style="margin-top:0">오늘의 공유 문구</div>
+
+  {% if sent == 'ok' %}
+  <div class="glass" style="padding:12px 18px; margin-bottom:16px; font-size:13px; color:var(--accent);">카카오톡 '나와의 채팅'으로 발송했습니다.</div>
+  {% elif sent == 'no_kakao' %}
+  <div class="glass" style="padding:12px 18px; margin-bottom:16px; font-size:13px; color:var(--warning);">카카오 연동이 안 되어 있습니다. <a href="/account" style="color:var(--secondary)">내 계정</a>에서 먼저 연동해주세요.</div>
+  {% elif sent == 'fail' %}
+  <div class="glass" style="padding:12px 18px; margin-bottom:16px; font-size:13px; color:var(--danger);">발송에 실패했습니다. 카카오 연동 상태를 확인해주세요.</div>
+  {% endif %}
+
+  <div class="glass promo-box fade-in">
+    <h2>오픈채팅방 붙여넣기용 전문</h2>
+    <div class="hint">
+      매일 장 마감 후(16:10 KST) 축약본이 카카오톡 '나와의 채팅'으로 자동 발송됩니다.
+      아래 전문을 복사해서 오픈채팅방에 붙여넣으세요. 신규 신호와 직전 신호의 결과(빗나간 것 포함)가 자동으로 채워집니다.
+    </div>
+    <textarea id="promo-full" class="promo-text" readonly>{{ msgs.full }}</textarea>
+    <div class="promo-actions">
+      <button type="button" onclick="copyPromo()">전문 복사하기</button>
+      <form method="post" action="/admin/promo/send" style="display:inline;">
+        <button type="submit" style="background:transparent; border:1px solid var(--line-strong); color:var(--text);">축약본 카카오로 보내기</button>
+      </form>
+      <span class="copied" id="copied-msg">복사되었습니다!</span>
+    </div>
+  </div>
+
+  <div class="glass promo-box fade-in" style="margin-top:16px;">
+    <h2>카카오 자동 발송 축약본 (미리보기)</h2>
+    <div class="hint">카카오 텍스트 메시지는 200자 제한이 있어 이렇게 줄여서 발송됩니다.</div>
+    <div class="promo-kakao">{{ msgs.kakao }}</div>
+  </div>
+</div>
+
+<script>
+function copyPromo() {
+  const ta = document.getElementById('promo-full');
+  navigator.clipboard.writeText(ta.value).then(() => {
+    const msg = document.getElementById('copied-msg');
+    msg.style.display = 'inline';
+    setTimeout(() => { msg.style.display = 'none'; }, 2000);
+  });
+}
+</script>
+
+</body>
+</html>

@@ -294,3 +294,95 @@ def send_daily_digest(cfg: dict):
             sent_count += 1
 
     print(f"[일일 요약] 대상 {len(users)}명 중 {sent_count}명 발송, {skipped_count}명은 오늘 이미 알림을 받아 제외")
+
+
+# ----------------------------------------------------------------------
+# 오픈채팅 홍보용 "오늘의 신호" 문구
+#
+# 카카오톡 오픈채팅방은 봇 자동 발송이 불가능하므로, 관리자가 복사해서
+# 붙여넣을 문구를 매일 만들어 관리자의 '나와의 채팅'으로 보내줍니다.
+# 전문(길이 제한 없음)은 /admin/promo 페이지에서 복사할 수 있습니다.
+# ----------------------------------------------------------------------
+
+_SIGNAL_KR = {"BUY": "매수", "SELL": "매도"}
+_WEEKDAY_KR = ["월", "화", "수", "목", "금", "토", "일"]
+
+
+def _fmt_ret(v) -> str:
+    return f"{v:+.1f}%" if v is not None else "집계 중"
+
+
+def build_promo_messages() -> dict:
+    """성과 캐시(performance)에서 오늘 신규 신호와 직전 신호의 현재 성적을 뽑아
+    홍보 문구를 만듭니다. 반환: {"full": 전문, "kakao": 200자 축약본}.
+    빗나간 결과도 그대로 넣습니다 - 정직한 공개가 이 채널의 차별점입니다."""
+    from . import performance
+    stats = performance.get_cached_or_compute()
+    events = stats.get("events", [])
+
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    new_today = [e for e in events if e["date"] == today]
+    prev_dates = sorted({e["date"] for e in events if e["date"] < today}, reverse=True)
+    prev_events = [e for e in events if prev_dates and e["date"] == prev_dates[0]]
+
+    perf_url = f"{kakao.SITE_URL}/performance"
+    header = f"[AlphaTiming 오늘의 신호] {now.month}/{now.day} ({_WEEKDAY_KR[now.weekday()]})"
+
+    # ---- 전문 (오픈채팅 붙여넣기용, 길이 제한 없음) ----
+    lines = [header, ""]
+    if new_today:
+        lines.append("📌 신규 전환 신호")
+        for e in new_today:
+            price = f" (신호가 {e['entry_price']:,.0f})" if e.get("entry_price") else ""
+            lines.append(f"· {e['name']} {_SIGNAL_KR.get(e['signal'], e['signal'])}{price}")
+    else:
+        lines.append("📌 오늘은 신규 매수/매도 전환 신호가 없습니다.")
+    if prev_events:
+        d = prev_dates[0]
+        lines.append("")
+        lines.append(f"📊 직전 신호 결과 ({int(d[5:7])}/{int(d[8:10])})")
+        for e in prev_events:
+            lines.append(f"· {e['name']} {_SIGNAL_KR.get(e['signal'], e['signal'])} → 현재 {_fmt_ret(e.get('ret_now'))}")
+    lines += [
+        "",
+        "빗나간 신호까지 전부 공개하는 전체 성적표",
+        f"→ {perf_url}",
+        "",
+        "※ 통계 모델 기반 참고 지표이며 투자 권유가 아닙니다. 투자 판단과 책임은 본인에게 있습니다.",
+    ]
+    full = "\n".join(lines)
+
+    # ---- 카카오 '나에게 보내기'용 축약본 (200자 제한) ----
+    klines = [header]
+    if new_today:
+        names = [f"{e['name']} {_SIGNAL_KR.get(e['signal'], e['signal'])}" for e in new_today]
+        shown = names[:3]
+        extra = f" 외 {len(names) - 3}건" if len(names) > 3 else ""
+        klines.append("신규: " + ", ".join(shown) + extra)
+    else:
+        klines.append("신규 신호 없음")
+    if prev_events:
+        results = [f"{e['name']} {_fmt_ret(e.get('ret_now'))}" for e in prev_events[:3]]
+        klines.append("직전: " + ", ".join(results))
+    klines.append(f"전문 복사: {kakao.SITE_URL}/admin/promo")
+    kakao_msg = "\n".join(klines)[:200]
+
+    return {"full": full, "kakao": kakao_msg}
+
+
+def send_promo_message(cfg: dict):
+    """매일 16:10(KST) - 카카오 연동된 관리자에게 '오늘의 공유 문구' 축약본을 보냅니다.
+    전문은 /admin/promo에서 복사합니다."""
+    try:
+        msgs = build_promo_messages()
+    except Exception as e:
+        print(f"[홍보 문구] 생성 실패: {e}")
+        return
+    admins = [u for u in db.get_all_kakao_connected_users() if u.get("is_admin")]
+    if not admins:
+        print("[홍보 문구] 카카오 연동된 관리자가 없어 발송 생략 (/admin/promo 에서 확인 가능)")
+        return
+    for u in admins:
+        kakao.notify_user(u, "PROMO", msgs["kakao"], cfg)
+    print(f"[홍보 문구] 관리자 {len(admins)}명에게 발송 완료")
