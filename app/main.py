@@ -195,6 +195,7 @@ def dashboard(request: Request, market: str = "stock"):
             "stock_market_open": du.is_kr_market_open(),
             "us_market_open": du.is_us_market_open(),
             "plans": [billing_plans.get_plan(k) for k in billing_plans.PLAN_ORDER],
+            "billing_enabled": _billing_enabled(),
         })
     if auth.needs_profile_completion(user):
         return RedirectResponse(url="/complete-profile", status_code=303)
@@ -518,6 +519,12 @@ def performance_page(request: Request):
     })
 
 
+def _billing_enabled() -> bool:
+    """유료 결제 오픈 여부. 유사투자자문업 신고가 끝날 때까지 결제 진입점을 잠가둡니다.
+    Render 환경변수 BILLING_ENABLED=true 로 바꾸면 코드 수정 없이 유료 플랜이 열립니다."""
+    return os.getenv("BILLING_ENABLED", "false").strip().lower() in ("1", "true", "yes", "y")
+
+
 @app.get("/pricing", response_class=HTMLResponse)
 def pricing_page(request: Request):
     user = auth.current_user(request)
@@ -532,11 +539,14 @@ def pricing_page(request: Request):
         "current_index": current_index,
         "subscription": subscription,
         "pending_plan_key": subscription.get("pending_plan") if subscription else None,
+        "billing_enabled": _billing_enabled(),
     })
 
 
 @app.get("/billing/checkout", response_class=HTMLResponse)
 def billing_checkout(request: Request, plan: str = ""):
+    if not _billing_enabled():
+        return RedirectResponse(url="/pricing", status_code=303)
     user = auth.current_user(request)
     if not user:
         next_url = quote(f"/billing/checkout?plan={plan}")
@@ -612,6 +622,8 @@ def billing_fail(request: Request, message: str = "결제가 취소되었거나 
 # ----------------------------------------------------------------------
 @app.get("/billing/checkout/kakao")
 def billing_checkout_kakao(request: Request, plan: str = ""):
+    if not _billing_enabled():
+        return RedirectResponse(url="/pricing", status_code=303)
     user = auth.current_user(request)
     if not user:
         next_url = quote(f"/billing/checkout/kakao?plan={plan}")
@@ -698,6 +710,8 @@ def billing_cancel(request: Request):
 # ----------------------------------------------------------------------
 @app.get("/billing/checkout/payapp")
 def billing_checkout_payapp(request: Request, plan: str = ""):
+    if not _billing_enabled():
+        return RedirectResponse(url="/pricing", status_code=303)
     user = auth.current_user(request)
     if not user:
         next_url = quote(f"/billing/checkout/payapp?plan={plan}")

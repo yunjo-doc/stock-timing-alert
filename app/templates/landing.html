@@ -183,7 +183,7 @@
     {% endfor %}
   </div>
   <div class="footer-note" style="text-align:center; border-top:none;">
-    <a href="/pricing" style="color:var(--secondary); text-decoration:none;">전체 요금제 자세히 보기 →</a>
+    {% if not billing_enabled %}유료 플랜은 오픈 준비 중입니다. 지금은 무료로 이용해보세요. · {% endif %}<a href="/pricing" style="color:var(--secondary); text-decoration:none;">전체 요금제 자세히 보기 →</a>
   </div>
 
   <div class="glass lp-final fade-in" style="margin-top:40px;">

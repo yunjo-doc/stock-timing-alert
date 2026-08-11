@@ -55,6 +55,13 @@
     관심종목으로 등록할 수 있는 개수만큼 매수/매도 타이밍 신호를 받아볼 수 있습니다. 언제든 업그레이드하거나 해지할 수 있습니다.
   </div>
 
+  {% if not billing_enabled %}
+  <div class="glass" style="padding:16px 20px; margin-bottom:22px; font-size:13px; line-height:1.7;">
+    <b style="color:var(--warning);">유료 플랜은 현재 오픈 준비 중입니다.</b>
+    지금은 무료 플랜으로 서비스를 이용해보실 수 있으며, 유료 플랜이 열리면 가입하신 분들께 먼저 안내드릴게요.
+  </div>
+  {% endif %}
+
   <div class="plan-grid">
     {% for p in plans %}
     {% set p_index = plan_order.index(p.key) %}
@@ -68,6 +75,8 @@
 
       {% if p.key == current_plan %}
         <button type="button" disabled style="opacity:.5; cursor:default;">현재 플랜</button>
+      {% elif p.price > 0 and not billing_enabled %}
+        <button type="button" disabled style="opacity:.5; cursor:default;">준비 중</button>
       {% elif pending_plan_key == p.key %}
         <button type="button" disabled style="opacity:.5; cursor:default;">
           {{ subscription.current_period_end[:10] if subscription and subscription.current_period_end else '다음 결제일' }}부터 적용 예정
