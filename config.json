@@ -75,5 +75,11 @@
   "kakao": {
     "enabled": false,
     "rest_api_key": ""
+  },
+
+  "ma_pullback": {
+    "short": 10,
+    "mid": 20,
+    "long": 50
   }
 }

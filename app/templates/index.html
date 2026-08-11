@@ -146,6 +146,22 @@
 .ai-rec-empty { color: var(--muted-2); font-size: 12.5px; padding: 8px 0; }
 .ai-rec-locked { text-align: center; padding: 16px 10px; color: var(--muted); font-size: 13px; line-height: 1.7; }
 
+.ma-pb-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; gap: 10px; flex-wrap: wrap; }
+.ma-pb-note { font-size: 12px; color: var(--muted); }
+.ma-pb-updated { font-family: var(--font-mono); font-size: 11px; color: var(--muted-2); margin: 8px 0 10px; min-height: 14px; }
+.ma-pb-list { display: flex; flex-direction: column; gap: 8px; }
+.ma-pb-item { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--overlay); border: 1px solid var(--line); }
+.ma-pb-item-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ma-pb-name { font-size: 13px; font-weight: 600; flex: 1; }
+.ma-pb-badge { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.ma-pb-badge.entry-long { background: var(--accent-dim); color: var(--accent); }
+.ma-pb-badge.entry-short { background: var(--danger-dim); color: var(--danger); }
+.ma-pb-badge.waiting { background: var(--warning-dim); color: var(--warning); }
+.ma-pb-badge.invalid, .ma-pb-badge.none { background: var(--overlay-strong); color: var(--muted); }
+.ma-pb-detail { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.ma-pb-levels { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted-2); margin-top: 4px; }
+.ma-pb-empty { color: var(--muted-2); font-size: 12.5px; padding: 8px 0; }
+
 </style>
 </head>
 <body>
@@ -338,6 +354,16 @@
     {% endif %}
   </div>
   {% endif %}
+
+  <div class="section-title" style="margin-top:0"><span class="n">·</span> 이평선 눌림목 전략 <span style="font-size:11px; color:var(--muted); font-weight:500;">10·20·50일선 정배열/역배열 + 눌림목 돌파 (관심종목 기준, 기존 5요소 신호와 별개)</span></div>
+  <div class="glass panel fade-in">
+    <div class="ma-pb-head">
+      <span class="ma-pb-note">관심종목의 오늘자 진입/대기/무효화 상태를 확인합니다.</span>
+      <button type="button" class="ai-rec-refresh" onclick="loadMaPullback()">관심종목 스캔</button>
+    </div>
+    <div class="ma-pb-updated" id="maPullbackUpdated">아직 조회하지 않았습니다</div>
+    <div class="ma-pb-list" id="maPullbackList"></div>
+  </div>
 
   {% if not signals %}
   <div class="empty" style="margin-top:24px">
@@ -839,6 +865,84 @@ async function addAiRecToWatchlist(code, name, btn) {
     btn.disabled = false;
     btn.textContent = '+ 추가';
   }
+}
+
+// 이평선(10/20/50일) 눌림목 전략: 관심종목 수가 적어 캐시/폴링 없이 클릭 즉시 동기 조회합니다.
+const MA_PB_LABELS = {
+  LONG_ENTRY: { label: '매수 진입', cls: 'entry-long' },
+  LONG_WAITING: { label: '눌림목 대기', cls: 'waiting' },
+  LONG_INVALID: { label: '무효화', cls: 'invalid' },
+  SHORT_ENTRY: { label: '매도 진입', cls: 'entry-short' },
+  SHORT_WAITING: { label: '반등 대기', cls: 'waiting' },
+  SHORT_INVALID: { label: '무효화', cls: 'invalid' },
+  NONE: { label: '해당 없음', cls: 'none' },
+};
+
+async function loadMaPullback() {
+  const btn = document.querySelector('.ma-pb-head .ai-rec-refresh');
+  const updatedEl = document.getElementById('maPullbackUpdated');
+  btn.disabled = true;
+  updatedEl.textContent = '조회 중...';
+  try {
+    const resp = await fetch(`/api/ma-pullback?market=${encodeURIComponent(CURRENT_MARKET)}`);
+    if (resp.status === 401) {
+      updatedEl.textContent = '로그인이 필요합니다.';
+      return;
+    }
+    if (!resp.ok) throw new Error('요청 실패 (' + resp.status + ')');
+    const data = await resp.json();
+    renderMaPullback(data);
+  } catch (e) {
+    updatedEl.textContent = '오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderMaPullback(data) {
+  const updatedEl = document.getElementById('maPullbackUpdated');
+  const listEl = document.getElementById('maPullbackList');
+  updatedEl.textContent = `${formatAiRecUpdatedAt(new Date().toISOString())} 기준`;
+
+  listEl.innerHTML = '';
+  if (!data.items || data.items.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'ma-pb-empty';
+    empty.textContent = '관심종목이 없습니다. 먼저 관심종목을 추가해주세요.';
+    listEl.appendChild(empty);
+    return;
+  }
+  data.items.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'ma-pb-item';
+
+    const top = document.createElement('div');
+    top.className = 'ma-pb-item-top';
+    const name = document.createElement('span');
+    name.className = 'ma-pb-name';
+    name.textContent = `${item.name} (${item.code})`;
+    const info = MA_PB_LABELS[item.setup] || MA_PB_LABELS.NONE;
+    const badge = document.createElement('span');
+    badge.className = 'ma-pb-badge ' + info.cls;
+    badge.textContent = info.label;
+    top.appendChild(name);
+    top.appendChild(badge);
+    row.appendChild(top);
+
+    if (item.detail) {
+      const detail = document.createElement('div');
+      detail.className = 'ma-pb-detail';
+      detail.textContent = item.detail;
+      row.appendChild(detail);
+    }
+    if (item.ma_short !== null && item.ma_short !== undefined) {
+      const levels = document.createElement('div');
+      levels.className = 'ma-pb-levels';
+      levels.textContent = `10일선 ${formatPriceJs(item.ma_short)} · 20일선 ${formatPriceJs(item.ma_mid)} · 50일선 ${formatPriceJs(item.ma_long)}`;
+      row.appendChild(levels);
+    }
+    listEl.appendChild(row);
+  });
 }
 
 function normalPdf(x) { return Math.exp(-(x * x) / 2) / Math.sqrt(2 * Math.PI); }

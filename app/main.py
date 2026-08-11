@@ -32,6 +32,7 @@ FastAPI 메인 앱
   POST /admin/members/{user_id}/profile             관리자가 회원 이름/전화번호 수정
   GET  /api/signals              최신 신호 JSON (외부 연동용)
   GET  /api/ai-recommend           AI 추천 종목 TOP5 JSON (코스피/코스닥, 프로 플랜 전용)
+  GET  /api/ma-pullback              이동평균선 눌림목 전략 JSON (관심종목 기준, 로그인 필요)
 """
 
 import os
@@ -66,6 +67,7 @@ from .notify import kakao as kakao_mod
 from .data_source import naver as naver_mod
 from .data_source import naver_world as naver_world_mod
 from . import ai_recommend
+from .analysis.ma_pullback import ma_pullback_signal
 from .data_source import upbit as upbit_mod
 from .billing import plans as billing_plans
 from .billing import toss as toss_client
@@ -849,6 +851,37 @@ def api_ai_recommend(request: Request, group: str = "kospi"):
         "updated_at": snapshot["updated_at"] if snapshot else None,
         "items": snapshot["data"] if snapshot else [],
     }
+
+
+@app.get("/api/ma-pullback")
+def api_ma_pullback(request: Request, market: str = "stock"):
+    """이동평균선(10/20/50일) 정배열·역배열 + 눌림목 전략을 로그인한 사용자의 관심종목
+    (해당 market)에 대해 계산합니다. 기존 5요소 신호 엔진과는 완전히 별개의 전략입니다.
+    관심종목 수가 적어(플랜당 최대 몇~10여 개) AI 추천처럼 백그라운드 스캔+캐시 없이
+    동기로 바로 계산해 반환합니다."""
+    user = auth.current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    market = market if market in VALID_MARKETS else "stock"
+
+    data_source = SEARCH_SOURCES.get(market, naver_mod)
+    fetch_ohlcv = getattr(data_source, "get_daily_ohlcv_fast", data_source.get_daily_ohlcv)
+    watchlist = db.get_user_watchlist(user["id"], market=market)
+    cfg = load_config()
+
+    items = []
+    for stock in watchlist:
+        code, name = stock["code"], stock["name"]
+        try:
+            rows = fetch_ohlcv(code, cfg["lookback_days"])
+            closes = [r["close"] for r in rows]
+            result = ma_pullback_signal(closes, cfg)
+        except Exception as e:
+            print(f"[MA눌림목 오류] {name}({code}): {e}")
+            continue
+        items.append({"code": code, "name": name, **result})
+
+    return {"market": market, "items": items}
 
 
 # ----------------------------------------------------------------------
