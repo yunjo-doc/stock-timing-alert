@@ -95,6 +95,10 @@ def _analyze_stocks(market: str, stock_list: list, cfg: dict, fast: bool = False
         # SELL->BUY, 그리고 관심종목 등록 후 첫 신호가 BUY/SELL인 경우도 포함).
         # 반대로 BUY/SELL -> HOLD(관망으로 빠지는 경우)는 알림을 보내지 않습니다.
         if curr_signal in ("BUY", "SELL") and curr_signal != prev_signal:
+            risk_detail = (result.get("components", {}).get("risk", {}) or {}).get("detail") or {}
+            db.record_signal_event(code, name, market, curr_signal, prev_signal,
+                                    result.get("current_price"),
+                                    risk_detail.get("target_price"), risk_detail.get("stop_loss"))
             message = _build_message(result, prev_signal)
             kakao.notify_all_connected_users(code, message, cfg)
 
@@ -150,6 +154,11 @@ def run_analysis_cycle(cfg: dict):
     # 아무 종목이나 하나 저장될 때마다 계속 갱신되어(전체 종목 처리에 수 분~십수 분 걸림)
     # "완료됐다"고 오판하게 만들므로, 사이클 전체가 끝난 시점만 별도로 기록합니다.
     db.save_market_snapshot("last_full_analysis", {"done": True})
+    try:
+        from . import performance
+        performance.refresh_cache()
+    except Exception as e:
+        print(f"[성과 트랙레코드 갱신 실패] {e}")
     print("===== 분석 사이클 종료 =====\n")
     return results
 

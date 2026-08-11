@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>실제 성과 — AlphaTiming</title>
+<meta name="description" content="AlphaTiming이 낸 모든 매수·매도 신호의 이후 5거래일/20거래일 수익률과 적중률을 있는 그대로 공개합니다.">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" type="image/png" href="/static/logo.png">
+<style>
+.perf-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 26px; }
+.perf-stat { padding: 20px 18px; }
+.perf-stat .label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.perf-stat .value { font-family: var(--font-mono); font-size: 24px; font-weight: 700; }
+.perf-stat .sub { font-size: 11.5px; color: var(--muted-2); margin-top: 6px; }
+.sig-badge { display: inline-block; font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px; }
+.sig-badge.buy { background: var(--accent-dim); color: var(--accent); }
+.sig-badge.sell { background: var(--danger-dim); color: var(--danger); }
+.ret-pos { color: var(--accent); font-family: var(--font-mono); }
+.ret-neg { color: var(--danger); font-family: var(--font-mono); }
+.ret-none { color: var(--muted-2); font-size: 11.5px; }
+.hit-yes { color: var(--accent); font-size: 12px; }
+.hit-no { color: var(--danger); font-size: 12px; }
+.market-tag { font-size: 10.5px; color: var(--muted-2); font-family: var(--font-mono); margin-left: 6px; }
+.perf-note { font-size: 12.5px; color: var(--muted); line-height: 1.8; }
+@media (max-width: 900px) { .perf-summary { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" class="brand">
+    <img src="/static/logo.png" alt="AlphaTiming" class="brand-logo">
+    <h1>AlphaTiming</h1>
+  </a>
+  <button class="nav-toggle" onclick="this.nextElementSibling.classList.toggle('open')">☰</button>
+  <nav>
+    <a href="/">대시보드</a>
+    <a href="/performance" class="active">실제 성과</a>
+    <a href="/pricing">요금제</a>
+    {% if user %}
+    <a href="/account">{{ user.email }}</a>
+    {% else %}
+    <a href="/login">로그인</a>
+    {% endif %}
+  </nav>
+</div>
+
+<div class="wrap">
+  <div class="section-title" style="margin-top:0">실제 성과 (트랙레코드)</div>
+  <div class="perf-note" style="margin-bottom:22px;">
+    최근 {{ stats.days }}일간 AlphaTiming이 낸 <b>모든</b> 매수/매도 전환 신호의 이후 성적입니다.
+    유리한 결과만 골라서 보여주지 않으며, 빗나간 신호도 그대로 표시됩니다.
+    BUY 신호는 이후 주가가 오르면 적중, SELL 신호는 이후 주가가 내리면 적중으로 집계합니다.
+  </div>
+
+  {% set b5 = stats.summary.buy['5'] %}
+  {% set b20 = stats.summary.buy['20'] %}
+  {% set s5 = stats.summary.sell['5'] %}
+  {% set s20 = stats.summary.sell['20'] %}
+
+  {% if stats.summary.total == 0 %}
+  <div class="glass" style="padding:40px; text-align:center; color:var(--muted);">
+    아직 집계된 신호 이벤트가 없습니다. 분석 사이클이 돌면서 매수/매도 전환이 발생하면 이곳에 기록됩니다.
+  </div>
+  {% else %}
+
+  <div class="perf-summary">
+    <div class="glass perf-stat fade-in">
+      <div class="label">신호 수 (최근 {{ stats.days }}일)</div>
+      <div class="value">{{ stats.summary.total }}</div>
+      <div class="sub">BUY {{ stats.summary.buy_count }} · SELL {{ stats.summary.sell_count }}</div>
+    </div>
+    <div class="glass perf-stat fade-in" style="animation-delay:.05s">
+      <div class="label">BUY 신호 후 5거래일 평균</div>
+      <div class="value {{ 'ret-pos' if b5.avg is not none and b5.avg >= 0 else 'ret-neg' }}">
+        {{ '%+.2f'|format(b5.avg) ~ '%' if b5.avg is not none else '—' }}
+      </div>
+      <div class="sub">표본 {{ b5.n }}건</div>
+    </div>
+    <div class="glass perf-stat fade-in" style="animation-delay:.1s">
+      <div class="label">BUY 적중률 (5거래일)</div>
+      <div class="value">{{ b5.hit_rate ~ '%' if b5.hit_rate is not none else '—' }}</div>
+      <div class="sub">20거래일 기준 {{ b20.hit_rate ~ '%' if b20.hit_rate is not none else '—' }}</div>
+    </div>
+    <div class="glass perf-stat fade-in" style="animation-delay:.15s">
+      <div class="label">SELL 적중률 (5거래일)</div>
+      <div class="value">{{ s5.hit_rate ~ '%' if s5.hit_rate is not none else '—' }}</div>
+      <div class="sub">20거래일 기준 {{ s20.hit_rate ~ '%' if s20.hit_rate is not none else '—' }}</div>
+    </div>
+  </div>
+
+  <div class="section-title">신호별 성적표 <span style="font-size:11.5px; color:var(--muted-2); font-weight:400;">(최근 {{ stats.events|length }}건)</span></div>
+  <div class="glass table-card fade-in">
+    <table>
+      <thead>
+        <tr>
+          <th>날짜</th>
+          <th>종목</th>
+          <th>신호</th>
+          <th>신호가</th>
+          <th>+5거래일</th>
+          <th>+20거래일</th>
+          <th>현재까지</th>
+          <th>결과 (5일)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in stats.events %}
+        <tr>
+          <td style="font-family:var(--font-mono); font-size:12px;">{{ e.date }}</td>
+          <td>{{ e.name }}<span class="market-tag">{{ {'stock':'국내','us_stock':'해외','crypto':'코인'}.get(e.market, e.market) }}</span></td>
+          <td><span class="sig-badge {{ e.signal|lower }}">{{ e.signal }}</span></td>
+          <td style="font-family:var(--font-mono);">{{ '{:,.0f}'.format(e.entry_price) if e.entry_price else '—' }}</td>
+          {% for key in ['ret_5', 'ret_20', 'ret_now'] %}
+          {% set r = e[key] %}
+          <td>
+            {% if r is none %}<span class="ret-none">집계 중</span>
+            {% else %}<span class="{{ 'ret-pos' if r >= 0 else 'ret-neg' }}">{{ '%+.2f'|format(r) }}%</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+          <td>
+            {% if e.hit_5 is none %}<span class="ret-none">집계 중</span>
+            {% elif e.hit_5 %}<span class="hit-yes">적중</span>
+            {% else %}<span class="hit-no">빗나감</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if not user %}
+  <div class="glass fade-in" style="text-align:center; padding:36px 20px; margin-top:30px;">
+    <h2 style="font-size:20px; margin:0 0 8px;">내 관심종목의 신호를 직접 받아보세요</h2>
+    <p style="font-size:13px; color:var(--muted); margin:0 0 18px;">무료 플랜은 카드 등록 없이 관심종목 1개부터 시작할 수 있습니다.</p>
+    <a href="/signup"><button type="button">무료로 시작하기</button></a>
+  </div>
+  {% endif %}
+
+  <div class="footer-note">
+    수익률은 신호 발생 시점 가격 대비 이후 종가 기준이며, 거래 수수료·세금·슬리피지는 반영되지 않았습니다.
+    과거 성과가 미래 수익을 보장하지 않습니다. 본 페이지의 모든 정보는 통계 모델 기반 참고 자료이며
+    특정 금융상품의 매수·매도 권유가 아닙니다. 투자에 대한 최종 판단과 책임은 투자자 본인에게 있습니다.
+    <br>집계 시각: {{ stats.generated_at[:16].replace('T', ' ') }}
+  </div>
+</div>
+
+</body>
+</html>

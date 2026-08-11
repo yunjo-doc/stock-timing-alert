@@ -15,7 +15,7 @@ import sqlite3
 import os
 import hashlib
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from contextlib import contextmanager
 
 from .config import DATA_DIR
@@ -131,6 +131,20 @@ def init_db():
                 updated_at TEXT NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS signal_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                code TEXT NOT NULL,
+                name TEXT NOT NULL,
+                market TEXT NOT NULL DEFAULT 'stock',
+                signal TEXT NOT NULL,
+                prev_signal TEXT,
+                price REAL,
+                target_price REAL,
+                stop_loss REAL
+            )
+        """)
         conn.commit()
 
     with get_conn() as conn:
@@ -144,6 +158,9 @@ def init_db():
         _ensure_column(conn, "subscriptions", "pending_price", "INTEGER")
         _ensure_column(conn, "subscriptions", "provider", "TEXT NOT NULL DEFAULT 'toss'")
         conn.commit()
+
+    with get_conn() as conn:
+        _backfill_signal_events(conn)
 
 
 def _ensure_column(conn, table: str, column: str, coltype: str):
@@ -222,6 +239,77 @@ def upsert_last_signal(code: str, signal: str, score: float):
             (code, signal, score, datetime.now().isoformat()),
         )
         conn.commit()
+
+
+# ----------------------------------------------------------------------
+# 신호 이벤트 (트랙레코드용 영구 이력)
+#
+# signals 테이블은 사이클마다 종목당 20건으로 잘라내므로(trim_signal_history)
+# 장기 성과 집계에 쓸 수 없습니다. BUY/SELL로 "전환된" 순간만 여기에 따로
+# 남겨 공개 성과 페이지(/performance)의 원본 데이터로 사용합니다.
+# ----------------------------------------------------------------------
+
+def _guess_market(code: str) -> str:
+    """과거 signals 백필처럼 market 정보가 없는 코드의 market을 추정합니다."""
+    if code.isdigit() and len(code) == 6:
+        return "stock"
+    if "-" in code:  # 업비트 마켓 코드 (예: KRW-BTC)
+        return "crypto"
+    return "us_stock"
+
+
+def _backfill_signal_events(conn):
+    """signal_events가 비어 있으면 남아있는 signals 이력에서 BUY/SELL 전환을 1회 추출.
+    trim 때문에 종목당 최근 20건밖에 없어 완전하지는 않지만, 이후부터는
+    record_signal_event()가 전환 시점마다 실시간으로 쌓습니다."""
+    cnt = conn.execute("SELECT COUNT(*) AS c FROM signal_events").fetchone()["c"]
+    if cnt:
+        return
+    wl_market = {
+        r["code"]: r["market"]
+        for r in conn.execute("SELECT code, market FROM user_watchlist GROUP BY code")
+    }
+    rows = conn.execute(
+        "SELECT created_at, code, name, signal, current_price, target_price, stop_loss "
+        "FROM signals ORDER BY code, id"
+    ).fetchall()
+    prev_by_code = {}
+    for r in rows:
+        prev = prev_by_code.get(r["code"])
+        if r["signal"] in ("BUY", "SELL") and r["signal"] != prev:
+            conn.execute(
+                "INSERT INTO signal_events (created_at, code, name, market, signal, prev_signal, "
+                "price, target_price, stop_loss) VALUES (?,?,?,?,?,?,?,?,?)",
+                (r["created_at"], r["code"], r["name"],
+                 wl_market.get(r["code"], _guess_market(r["code"])),
+                 r["signal"], prev, r["current_price"], r["target_price"], r["stop_loss"]),
+            )
+        prev_by_code[r["code"]] = r["signal"]
+    conn.commit()
+
+
+def record_signal_event(code, name, market, signal, prev_signal, price,
+                         target_price=None, stop_loss=None):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO signal_events (created_at, code, name, market, signal, prev_signal, "
+            "price, target_price, stop_loss) VALUES (?,?,?,?,?,?,?,?,?)",
+            (datetime.now().isoformat(), code, name, market, signal, prev_signal,
+             price, target_price, stop_loss),
+        )
+        conn.commit()
+
+
+def get_signal_events(days: int = None, limit: int = 1000):
+    query = "SELECT * FROM signal_events"
+    params = []
+    if days:
+        query += " WHERE created_at >= ?"
+        params.append((datetime.now() - timedelta(days=days)).isoformat())
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+    with get_conn() as conn:
+        return [dict(r) for r in conn.execute(query, params).fetchall()]
 
 
 def log_notification(code: str, message: str, sent_via_kakao: bool, user_id: int = None):

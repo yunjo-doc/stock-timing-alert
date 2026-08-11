@@ -71,6 +71,7 @@ from . import ai_recommend
 from .analysis.ma_pullback import ma_pullback_signal
 from .data_source import upbit as upbit_mod
 from .billing import plans as billing_plans
+from . import performance
 from .billing import toss as toss_client
 from .billing import kakaopay as kakaopay_client
 from .billing import payapp as payapp_client
@@ -506,6 +507,17 @@ def account_page(request: Request, subscribed: int = 0, canceled: int = 0, downg
 # ----------------------------------------------------------------------
 # 요금제 / 구독 결제 (Toss Payments 정기결제 — 빌링키 발급 후 매월 자동 청구)
 # ----------------------------------------------------------------------
+@app.get("/performance", response_class=HTMLResponse)
+def performance_page(request: Request):
+    """공개 트랙레코드 — 모든 BUY/SELL 신호의 이후 5/20거래일 수익률과 적중률.
+    로그인 없이 볼 수 있습니다 (신뢰 구축이 목적이므로 일부러 공개)."""
+    stats = performance.get_cached_or_compute()
+    return templates.TemplateResponse(request, "performance.html", {
+        "stats": stats,
+        "user": auth.current_user(request),
+    })
+
+
 @app.get("/pricing", response_class=HTMLResponse)
 def pricing_page(request: Request):
     user = auth.current_user(request)
