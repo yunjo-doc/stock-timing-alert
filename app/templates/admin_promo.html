@@ -43,10 +43,26 @@
   {% if sent == 'ok' %}
   <div class="glass" style="padding:12px 18px; margin-bottom:16px; font-size:13px; color:var(--accent);">카카오톡 '나와의 채팅'으로 발송했습니다.</div>
   {% elif sent == 'no_kakao' %}
-  <div class="glass" style="padding:12px 18px; margin-bottom:16px; font-size:13px; color:var(--warning);">카카오 연동이 안 되어 있습니다. <a href="/account" style="color:var(--secondary)">내 계정</a>에서 먼저 연동해주세요.</div>
+  <div class="glass" style="padding:12px 18px; margin-bottom:16px; font-size:13px; color:var(--warning);">카카오 연동이 안 되어 있습니다. 아래 "카카오 연동하기" 버튼으로 먼저 연동해주세요.</div>
   {% elif sent == 'fail' %}
   <div class="glass" style="padding:12px 18px; margin-bottom:16px; font-size:13px; color:var(--danger);">발송에 실패했습니다. 카카오 연동 상태를 확인해주세요.</div>
   {% endif %}
+  {% if connected %}
+  <div class="glass" style="padding:12px 18px; margin-bottom:16px; font-size:13px; color:var(--accent);">카카오 연동이 완료되었습니다. 내일부터 매일 16:10에 공유 문구가 '나와의 채팅'으로 발송됩니다.</div>
+  {% elif error %}
+  <div class="glass" style="padding:12px 18px; margin-bottom:16px; font-size:13px; color:var(--danger);">{{ error }}</div>
+  {% endif %}
+
+  <div class="glass" style="padding:16px 22px; margin-bottom:16px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+    {% if kakao_connected %}
+    <span style="font-size:13px; color:var(--accent);">✓ 카카오 연동됨</span>
+    <span style="font-size:12px; color:var(--muted);">매일 16:10(KST) 축약본이 '나와의 채팅'으로 자동 발송됩니다.</span>
+    {% else %}
+    <span style="font-size:13px; color:var(--warning);">카카오 미연동</span>
+    <span style="font-size:12px; color:var(--muted);">연동하면 매일 16:10(KST) 공유 문구를 카카오톡으로 받아볼 수 있습니다.</span>
+    <a href="/kakao/authorize?return_to=admin"><button type="button" style="background:#FEE500; color:#191919; border:none;">카카오 연동하기</button></a>
+    {% endif %}
+  </div>
 
   <div class="glass promo-box fade-in">
     <h2>오픈채팅방 붙여넣기용 전문</h2>
@@ -57,9 +73,11 @@
     <textarea id="promo-full" class="promo-text" readonly>{{ msgs.full }}</textarea>
     <div class="promo-actions">
       <button type="button" onclick="copyPromo()">전문 복사하기</button>
+      {% if kakao_connected %}
       <form method="post" action="/admin/promo/send" style="display:inline;">
         <button type="submit" style="background:transparent; border:1px solid var(--line-strong); color:var(--text);">축약본 카카오로 보내기</button>
       </form>
+      {% endif %}
       <span class="copied" id="copied-msg">복사되었습니다!</span>
     </div>
   </div>

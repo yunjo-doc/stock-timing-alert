@@ -945,7 +945,7 @@ def api_ma_pullback(request: Request, market: str = "stock"):
 # 카카오톡 '나에게 채팅' 연동 (로그인한 사용자 본인 계정에 연결)
 # ----------------------------------------------------------------------
 @app.get("/kakao/authorize")
-def kakao_authorize(request: Request):
+def kakao_authorize(request: Request, return_to: str = ""):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/account", status_code=303)
@@ -954,6 +954,13 @@ def kakao_authorize(request: Request):
     rest_api_key = cfg["kakao"].get("rest_api_key")
     if not rest_api_key:
         return HTMLResponse("환경변수 KAKAO_REST_API_KEY 가 설정되어 있지 않습니다. Render 환경변수를 확인해주세요.", status_code=400)
+
+    # 관리자 공유 문구 페이지에서 연동을 시작한 경우, OAuth 왕복 후 그 페이지로
+    # 돌아가게 세션에 표시해둡니다 (redirect_uri는 카카오에 등록된 값 그대로 유지).
+    if return_to == "admin":
+        request.session["kakao_return_to"] = "admin"
+    else:
+        request.session.pop("kakao_return_to", None)
 
     redirect_uri = str(request.base_url) + "kakao/callback"
     url = kakao_mod.get_authorize_url(rest_api_key, redirect_uri)
@@ -965,6 +972,9 @@ def kakao_callback(request: Request, code: str = ""):
     user = auth.current_user(request)
     if not user:
         return RedirectResponse(url="/login?next=/account", status_code=303)
+
+    # 연동을 관리자 공유 문구 페이지에서 시작했으면 결과(성공/실패)도 그쪽으로 돌려보냅니다.
+    dest = "/admin/promo" if request.session.pop("kakao_return_to", "") == "admin" else "/account"
 
     cfg = load_config()
     rest_api_key = cfg["kakao"].get("rest_api_key")
@@ -981,12 +991,12 @@ def kakao_callback(request: Request, code: str = ""):
     granted_scopes = (token_data.get("scope") or "").split()
     if "talk_message" not in granted_scopes:
         return RedirectResponse(
-            url=f"/account?error={quote('카카오톡 메시지 전송 권한에 동의하지 않아 연동이 완료되지 않았습니다. 다시 시도할 때 카카오 동의 화면에서 카카오톡 메시지 전송 항목에 동의해주세요.')}",
+            url=f"{dest}?error={quote('카카오톡 메시지 전송 권한에 동의하지 않아 연동이 완료되지 않았습니다. 다시 시도할 때 카카오 동의 화면에서 카카오톡 메시지 전송 항목에 동의해주세요.')}",
             status_code=303,
         )
 
     db.save_user_kakao_tokens(user["id"], token_data.get("access_token"), token_data.get("refresh_token"))
-    return RedirectResponse(url="/account?connected=1", status_code=303)
+    return RedirectResponse(url=f"{dest}?connected=1", status_code=303)
 
 
 @app.post("/kakao/disconnect")
@@ -1051,15 +1061,20 @@ def admin_logout(request: Request):
 
 
 @app.get("/admin/promo", response_class=HTMLResponse)
-def admin_promo_page(request: Request, sent: str = ""):
-    """오픈채팅방에 붙여넣을 '오늘의 신호' 홍보 문구. 전문 복사 + 카카오 재발송 버튼."""
+def admin_promo_page(request: Request, sent: str = "", connected: str = "", error: str = ""):
+    """오픈채팅방에 붙여넣을 '오늘의 신호' 홍보 문구. 카카오 연동/발송까지 이 페이지에서
+    전부 처리합니다 (관리자 워크플로우가 일반 사용자 페이지를 거치지 않도록)."""
     if not _is_admin_session(request):
         return RedirectResponse(url="/admin/login", status_code=303)
+    user = auth.current_user(request)
     msgs = build_promo_messages()
     return templates.TemplateResponse(request, "admin_promo.html", {
         "msgs": msgs,
         "sent": sent,
-        "user": auth.current_user(request),
+        "connected": connected,
+        "error": error,
+        "user": user,
+        "kakao_connected": bool(user and user.get("kakao_access_token")),
     })
 
 
