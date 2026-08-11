@@ -35,6 +35,7 @@ FastAPI 메인 앱
   GET  /api/ma-pullback              이동평균선 눌림목 전략 JSON (관심종목 기준, 로그인 필요)
 """
 
+import json
 import os
 import sys
 import threading
@@ -726,34 +727,59 @@ async def billing_payapp_feedback(request: Request):
 
     if data.get("linkval") != payapp_client.linkval():
         return PlainTextResponse("FAIL", status_code=400)
-    if data.get("pay_state") != "4":  # 결제완료(4)가 아니면(요청/취소 등) 무시
-        return PlainTextResponse("SUCCESS")
 
     rebill_no = data.get("rebill_no")
     if not rebill_no:
         return PlainTextResponse("SUCCESS")  # 정기결제 건이 아니면 이 흐름에서는 처리하지 않음
 
+    # pay_state (PayApp 결제통보): 4=결제완료, 8/32=요청취소(결제 전), 9/64=승인취소(환불),
+    # 70/71=부분취소, 99=정기결제 승인 실패(2회차 이후)
+    pay_state = data.get("pay_state", "")
     now = datetime.now()
-    period_end = now + timedelta(days=BILLING_PERIOD_DAYS)
     mul_no = data.get("mul_no", "")
+    raw = json.dumps(data, ensure_ascii=False)
     existing = db.get_subscription_by_billing_key(rebill_no)
 
-    if existing:
-        db.renew_subscription(existing["id"], now.isoformat(), period_end.isoformat())
-        db.log_payment(existing["user_id"], existing["id"], mul_no, existing["plan"],
-                        int(data.get("price", existing["price"])), "paid", "card", "")
-    else:
-        var1, var2 = data.get("var1", ""), data.get("var2", "")
-        plan_info = billing_plans.get_plan(var2) if var2 else None
-        if not var1.isdigit() or not plan_info:
-            return PlainTextResponse("SUCCESS")
-        user_id = int(var1)
-        sub_id = db.create_subscription(
-            user_id, plan_info["key"], plan_info["price"], rebill_no, f"user-{user_id}",
-            now.isoformat(), period_end.isoformat(), provider="payapp",
-        )
-        db.log_payment(user_id, sub_id, mul_no, plan_info["key"], plan_info["price"], "paid", "card", "")
+    if pay_state == "4":
+        period_end = now + timedelta(days=BILLING_PERIOD_DAYS)
+        if existing:
+            db.renew_subscription(existing["id"], now.isoformat(), period_end.isoformat())
+            db.log_payment(existing["user_id"], existing["id"], mul_no, existing["plan"],
+                            int(data.get("price", existing["price"])), "paid", "card", raw)
+        else:
+            var1, var2 = data.get("var1", ""), data.get("var2", "")
+            plan_info = billing_plans.get_plan(var2) if var2 else None
+            if not var1.isdigit() or not plan_info:
+                return PlainTextResponse("SUCCESS")
+            user_id = int(var1)
+            sub_id = db.create_subscription(
+                user_id, plan_info["key"], plan_info["price"], rebill_no, f"user-{user_id}",
+                now.isoformat(), period_end.isoformat(), provider="payapp",
+            )
+            db.log_payment(user_id, sub_id, mul_no, plan_info["key"], plan_info["price"], "paid", "card", raw)
 
+    elif pay_state in ("9", "64") and existing:
+        # 환불(승인취소): 구독을 즉시 종료하고, 이후 자동 청구가 계속되지 않도록 PayApp 쪽 정기결제도 해지
+        db.cancel_subscription(existing["user_id"])
+        try:
+            payapp_client.cancel_subscription(rebill_no)
+        except payapp_client.PayAppError:
+            pass  # 이미 PayApp 쪽에서 해지된 건이면 실패할 수 있음 — 우리 쪽 취소는 유지
+        db.log_payment(existing["user_id"], existing["id"], mul_no, existing["plan"],
+                        -abs(int(data.get("price", existing["price"]) or 0)), "refunded", "card", raw)
+
+    elif pay_state in ("70", "71") and existing:
+        # 부분취소: 일부 금액만 환불된 것이므로 구독은 유지하고 이력만 남김
+        db.log_payment(existing["user_id"], existing["id"], mul_no, existing["plan"],
+                        -abs(int(data.get("cancel_price", data.get("price", 0)) or 0)), "partial_refund", "card", raw)
+
+    elif pay_state == "99" and existing:
+        # 정기결제 승인 실패(2회차 이후): 구독을 미납 상태로 표시 (관리자 화면에서 past_due로 확인 가능)
+        db.mark_subscription_past_due(existing["id"])
+        db.log_payment(existing["user_id"], existing["id"], mul_no, existing["plan"],
+                        int(data.get("price", existing["price"]) or 0), "failed", "card", raw)
+
+    # 8/32(결제 전 요청취소) 등 나머지 상태는 활성 구독에 영향 없음
     return PlainTextResponse("SUCCESS")
 
 
