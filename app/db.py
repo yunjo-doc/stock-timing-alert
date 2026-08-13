@@ -525,12 +525,15 @@ def get_recent_notifications(limit=30, codes=None):
 
 
 def has_notification_today(user_id: int) -> bool:
-    """이 회원이 오늘(자정 이후) 알림을 한 건이라도 받았는지 여부.
-    일일 요약 알림 대상(오늘 아무 알림도 못 받은 회원)을 고를 때 사용합니다."""
+    """이 회원이 오늘(자정 이후) '실제' 알림(매수/매도 신호, 일일 요약 등)을 한 건이라도
+    받았는지 여부. 일일 요약 알림 대상(오늘 아무 알림도 못 받은 회원)을 고를 때 사용합니다.
+    연동 화면의 '테스트 알림 보내기'(code='TEST')는 연동 확인용일 뿐 실제 신호가 아니므로
+    카운트에서 제외합니다 - 안 그러면 테스트 알림 한 번 보낸 것만으로 그날의 진짜 일일
+    요약이 건너뛰어지는 문제가 있었습니다."""
     today_start = datetime.now().strftime("%Y-%m-%dT00:00:00")
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT 1 FROM notifications WHERE user_id=? AND created_at >= ? LIMIT 1",
+            "SELECT 1 FROM notifications WHERE user_id=? AND created_at >= ? AND code != 'TEST' LIMIT 1",
             (user_id, today_start),
         ).fetchone()
         return row is not None
