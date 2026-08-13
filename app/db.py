@@ -145,6 +145,23 @@ def init_db():
                 stop_loss REAL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS waitlist_clicks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                plan_key TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS waitlist_signups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                plan_key TEXT NOT NULL,
+                marketing_consent INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                UNIQUE(email, plan_key)
+            )
+        """)
         conn.commit()
 
     with get_conn() as conn:
@@ -823,6 +840,51 @@ def get_all_members_for_admin():
             "notification_count": len(notifications),
         })
     return members
+
+
+# ----------------------------------------------------------------------
+# 유료 플랜 오픈 알림 대기자 명단 (결제 없이 이메일만 수집 - 유사투자자문업 신고 전)
+# ----------------------------------------------------------------------
+def log_waitlist_click(plan_key: str):
+    """'오픈 알림 받기' 버튼을 누른 시점(모달을 연 시점) 자체를 플랜별로 집계합니다.
+    신청 완료 여부와 무관하게 남겨야, 정식 신고 절차를 시작할지 판단하는 핵심 지표
+    (특히 스탠다드 플랜 클릭 수)를 놓치지 않습니다."""
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO waitlist_clicks (plan_key, created_at) VALUES (?, ?)",
+            (plan_key, datetime.now().isoformat()),
+        )
+        conn.commit()
+
+
+def add_waitlist_signup(email: str, plan_key: str, marketing_consent: bool) -> bool:
+    """이메일+플랜 조합이 이미 있으면 조용히 무시합니다(중복 신청 방지)."""
+    with get_conn() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO waitlist_signups (email, plan_key, marketing_consent, created_at) "
+                "VALUES (?, ?, ?, ?)",
+                (email.strip().lower(), plan_key, int(marketing_consent), datetime.now().isoformat()),
+            )
+            conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+
+def get_waitlist_stats():
+    """관리자 화면용: 플랜별 클릭 수/신청 수와 최근 신청 목록."""
+    with get_conn() as conn:
+        clicks = {r["plan_key"]: r["c"] for r in conn.execute(
+            "SELECT plan_key, COUNT(*) as c FROM waitlist_clicks GROUP BY plan_key"
+        ).fetchall()}
+        signups = {r["plan_key"]: r["c"] for r in conn.execute(
+            "SELECT plan_key, COUNT(*) as c FROM waitlist_signups GROUP BY plan_key"
+        ).fetchall()}
+        recent = [dict(r) for r in conn.execute(
+            "SELECT * FROM waitlist_signups ORDER BY id DESC LIMIT 200"
+        ).fetchall()]
+        return {"clicks": clicks, "signups": signups, "recent": recent}
 
 
 # ----------------------------------------------------------------------

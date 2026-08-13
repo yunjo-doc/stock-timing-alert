@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="/static/logo.png">
 <style>
 .plan-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-.plan-card { padding: 26px 22px; display: flex; flex-direction: column; }
+.plan-card { padding: 26px 22px; display: flex; flex-direction: column; position: relative; }
 .plan-card .plan-name { font-size: 14px; color: var(--muted); margin-bottom: 6px; }
 .plan-card .plan-price { font-family: var(--font-mono); font-size: 26px; font-weight: 700; margin-bottom: 4px; }
 .plan-card .plan-price .unit { font-size: 12px; color: var(--muted); font-weight: 400; }
@@ -16,7 +16,7 @@
 .plan-card .plan-desc { font-size: 12.5px; color: var(--muted); line-height: 1.6; flex: 1; margin-bottom: 20px; }
 .plan-card.current { border-color: var(--accent); }
 .plan-card button, .plan-card a.pbtn {
-  display: block; text-align: center; text-decoration: none;
+  display: block; width: 100%; text-align: center; text-decoration: none;
   background: var(--secondary); color: #06131A; border: none; padding: 10px 0;
   border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; font-weight: 600;
 }
@@ -24,8 +24,77 @@
   display: inline-block; background: var(--accent-dim); color: var(--accent);
   font-family: var(--font-mono); font-size: 11px; padding: 4px 10px; border-radius: 20px; margin-bottom: 10px;
 }
+.plan-card .plan-note { font-size: 11px; color: var(--muted-2); text-align: center; margin-top: 8px; line-height: 1.5; }
+.plan-popular {
+  position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
+  background: var(--warning); color: #06131A; font-size: 11px; font-weight: 700;
+  padding: 4px 12px; border-radius: 999px; white-space: nowrap;
+}
 @media (max-width: 1080px) { .plan-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 640px) { .plan-grid { grid-template-columns: 1fr; } }
+
+/* ① 베타 배너 */
+.beta-banner {
+  background: var(--accent-dim); border-radius: var(--radius-lg); padding: 14px 20px;
+  font-size: 13px; line-height: 1.7; margin-bottom: 22px;
+}
+
+/* ② 헤드라인 */
+.pricing-hero { padding: 6px 4px 28px; }
+.pricing-hero h2 { font-size: 26px; margin: 0 0 8px; letter-spacing: -0.01em; }
+.pricing-hero p { font-size: 14px; color: var(--muted); margin: 0 0 4px; }
+.pricing-hero .pricing-hero-sub { font-size: 12.5px; color: var(--muted-2); margin-top: 10px; }
+@media (min-width: 720px) { .pricing-hero h2 { font-size: 32px; } }
+
+/* 베타 혜택 콜아웃 */
+.beta-benefit { padding: 16px 20px; font-size: 13px; line-height: 1.7; margin-top: 16px; }
+
+/* ④ 모달 */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; z-index: 100;
+  background: rgba(15,23,42,0.45); backdrop-filter: blur(4px);
+  align-items: center; justify-content: center; padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal-panel {
+  width: 100%; max-width: 440px; background: var(--card-solid); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg); box-shadow: 0 30px 60px -20px rgba(15,23,42,0.35);
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px; border-bottom: 1px solid var(--line);
+}
+.modal-header h2 { font-size: 14.5px; margin: 0; }
+.modal-close { background: transparent; border: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1; }
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 16px 20px 20px; }
+.waitlist-sub { font-family: var(--font-mono); font-size: 12.5px; color: var(--secondary); margin-bottom: 10px; }
+.waitlist-desc { font-size: 12px; color: var(--muted); line-height: 1.6; margin: 0 0 14px; }
+.modal-body input[type=email] { width: 100%; margin-bottom: 12px; }
+.waitlist-check {
+  display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--text);
+  line-height: 1.5; margin-bottom: 10px; cursor: pointer;
+}
+.waitlist-check input[type=checkbox] { margin-top: 2px; flex-shrink: 0; }
+.waitlist-check a { color: var(--secondary); text-decoration: none; }
+.waitlist-check a:hover { text-decoration: underline; }
+.waitlist-privacy-detail {
+  display: none; font-size: 11px; color: var(--muted); line-height: 1.7;
+  background: var(--overlay); border-radius: var(--radius-sm); padding: 12px 14px; margin: -4px 0 12px;
+  white-space: pre-line;
+}
+.waitlist-privacy-detail.open { display: block; }
+.waitlist-error { color: var(--danger); font-size: 12px; margin-bottom: 10px; min-height: 14px; }
+.waitlist-done { text-align: center; }
+.waitlist-done .icon { font-size: 32px; margin-bottom: 10px; }
+.waitlist-done .title { font-weight: 700; font-size: 15px; margin-bottom: 8px; }
+
+/* ⑥ FAQ */
+.faq-panel { padding: 6px 4px; }
+.faq-item { padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.faq-item:last-child { border-bottom: none; }
+.faq-q { font-size: 13.5px; font-weight: 700; margin-bottom: 6px; }
+.faq-a { font-size: 12.5px; color: var(--muted); line-height: 1.7; }
 </style>
 </head>
 <body>
@@ -50,15 +119,22 @@
 </div>
 
 <div class="wrap">
+
+  {% if not billing_enabled %}
+  <div class="beta-banner">
+    🔓 <b>현재 AlphaTiming은 오픈 베타입니다.</b> 모든 기능을 무료로 사용하실 수 있으며, 결제는 진행되지 않습니다.
+    베타 기간 중 가입하신 분들께는 정식 오픈 후에도 혜택을 유지해 드립니다.
+  </div>
+
+  <div class="pricing-hero">
+    <h2>감이 아니라, 계산된 타이밍</h2>
+    <p>5가지 지표로 매수·매도 시점을 분석합니다</p>
+    <p class="pricing-hero-sub">정식 오픈 예정 가격을 미리 공개합니다. 지금은 결제 없이 알림만 신청해 두세요.</p>
+  </div>
+  {% else %}
   <div class="section-title" style="margin-top:0">요금제</div>
   <div class="footer-note" style="margin-top:0; border-top:none; padding-top:0; margin-bottom:26px;">
     관심종목으로 등록할 수 있는 개수만큼 매수/매도 타이밍 신호를 받아볼 수 있습니다. 언제든 업그레이드하거나 해지할 수 있습니다.
-  </div>
-
-  {% if not billing_enabled %}
-  <div class="glass" style="padding:16px 20px; margin-bottom:22px; font-size:13px; line-height:1.7;">
-    <b style="color:var(--warning);">유료 플랜은 현재 오픈 준비 중입니다.</b>
-    지금은 무료 플랜으로 서비스를 이용해보실 수 있으며, 유료 플랜이 열리면 가입하신 분들께 먼저 안내드릴게요.
   </div>
   {% endif %}
 
@@ -66,6 +142,7 @@
     {% for p in plans %}
     {% set p_index = plan_order.index(p.key) %}
     <div class="glass plan-card fade-in {{ 'current' if p.key == current_plan else '' }}">
+      {% if not billing_enabled and p.key == 'standard' %}<span class="plan-popular">⭐ 가장 많이 선택</span>{% endif %}
       {% if p.key == current_plan %}<span class="current-badge">현재 이용중</span>{% endif %}
       {% if pending_plan_key == p.key %}<span class="current-badge" style="background:var(--muted); color:#06131A;">변경 예약됨</span>{% endif %}
       <div class="plan-name">{{ p.name }}</div>
@@ -73,10 +150,15 @@
       <div class="plan-limit">관심종목 {{ '무제한' if p.stock_limit is none else (p.stock_limit ~ '개') }}</div>
       <div class="plan-desc">{{ p.desc }}</div>
 
-      {% if p.key == current_plan %}
+      {% if not billing_enabled %}
+        {% if p.price == 0 %}
+        <a class="pbtn" href="{{ '/' if user else '/signup' }}">지금 무료로 시작하기</a>
+        <div class="plan-note">정식 오픈 후에도 계속 무료로 제공됩니다</div>
+        {% else %}
+        <button type="button" onclick="openWaitlistModal('{{ p.key }}', '{{ p.name }}', '{{ '{:,}'.format(p.price) }}', {{ (p.stock_limit ~ '') if p.stock_limit is not none else 'null' }})">오픈 알림 받기</button>
+        {% endif %}
+      {% elif p.key == current_plan %}
         <button type="button" disabled style="opacity:.5; cursor:default;">현재 플랜</button>
-      {% elif p.price > 0 and not billing_enabled %}
-        <button type="button" disabled style="opacity:.5; cursor:default;">준비 중</button>
       {% elif pending_plan_key == p.key %}
         <button type="button" disabled style="opacity:.5; cursor:default;">
           {{ subscription.current_period_end[:10] if subscription and subscription.current_period_end else '다음 결제일' }}부터 적용 예정
@@ -103,13 +185,164 @@
     {% endfor %}
   </div>
 
+  {% if not billing_enabled %}
+  <div class="glass beta-benefit fade-in">
+    💡 <b>베타 참여자 혜택</b> — 베타 기간에 가입하신 분은 정식 오픈 시 스탠다드 기능을 그대로 유지해 드립니다. 별도 신청 없이 자동 적용됩니다.
+  </div>
+
+  <div class="section-title">자주 묻는 질문</div>
+  <div class="glass faq-panel fade-in">
+    <div class="faq-item">
+      <div class="faq-q">Q. 지금 결제되나요?</div>
+      <div class="faq-a">아니요. 현재는 알림 신청만 받고 있으며, 어떤 비용도 청구되지 않습니다.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Q. 정식 오픈은 언제인가요?</div>
+      <div class="faq-a">서비스 안정화와 필요한 절차를 마친 후 오픈할 예정입니다. 일정이 확정되면 신청하신 분들께 가장 먼저 안내드립니다.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Q. 베타 때 쓰던 기능이 유료로 바뀌나요?</div>
+      <div class="faq-a">베타 참여자에게는 정식 오픈 후에도 스탠다드 기능을 유지해 드립니다. Free 플랜은 계속 무료로 운영됩니다.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Q. AlphaTiming의 신호는 정확한가요?</div>
+      <div class="faq-a">과거 시장 데이터를 기반으로 한 통계적 분석 결과이며, 미래의 수익이나 결과를 보장하지 않습니다.</div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    <b style="color:var(--text);">투자 유의사항</b><br>
+    AlphaTiming이 제공하는 정보는 과거 시장 데이터에 기반한 통계적 분석 결과이며, 특정 종목의 매매를 권유하거나
+    투자 수익을 보장하지 않습니다. 모든 투자 판단과 그 결과에 대한 책임은 이용자 본인에게 있습니다.
+    투자원금의 손실이 발생할 수 있습니다.
+  </div>
+  {% else %}
   <div class="footer-note">
     결제는 PayApp 정기결제로 처리되며, 등록한 카드로 매월 자동 청구됩니다.
     상위 플랜으로 업그레이드하면 즉시 결제되어 적용되고, 하위 플랜으로 변경하면 현재 결제 주기가 끝나는 날(다음 결제일)까지는
     기존 플랜을 그대로 이용하며 그 날짜에 하위 플랜 금액이 청구됩니다.
     구독 해지는 <a href="/account" style="color:var(--secondary)">내 계정</a> 페이지에서 언제든 가능합니다.
   </div>
+  {% endif %}
 </div>
+
+{% if not billing_enabled %}
+<div id="waitlistModal" class="modal-overlay" onclick="if(event.target===this) closeWaitlistModal()">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <h2 id="waitlistModalTitle">오픈 알림 신청</h2>
+      <button class="modal-close" onclick="closeWaitlistModal()">✕</button>
+    </div>
+    <div class="modal-body" id="waitlistFormWrap">
+      <div class="waitlist-sub" id="waitlistModalSub"></div>
+      <p class="waitlist-desc">정식 오픈일이 확정되면 가장 먼저 안내드립니다. 지금은 결제가 진행되지 않으며, 신청만으로 어떤 비용도 청구되지 않습니다.</p>
+      <input type="email" id="waitlistEmail" placeholder="이메일">
+      <label class="waitlist-check">
+        <input type="checkbox" id="waitlistPrivacy">
+        <span>(필수) 개인정보 수집·이용에 동의합니다 <a href="#" onclick="togglePrivacyDetail(event)">전문보기</a></span>
+      </label>
+      <div class="waitlist-privacy-detail" id="waitlistPrivacyDetail">개인정보 수집·이용 동의 안내
+
+- 수집 항목: 이메일 주소
+- 수집 목적: 유료 플랜 정식 오픈 일정 안내 및 관련 소식 발송
+- 보유·이용 기간: 정식 오픈 안내 발송 시 또는 동의 철회(수신거부) 요청 시까지
+- 동의를 거부하실 수 있으며, 이 경우 오픈 알림 신청이 제한됩니다.</div>
+      <label class="waitlist-check">
+        <input type="checkbox" id="waitlistMarketing">
+        <span>(선택) 서비스 소식 및 마케팅 정보 수신에 동의합니다</span>
+      </label>
+      <div class="waitlist-error" id="waitlistError"></div>
+      <button type="button" id="waitlistSubmitBtn" onclick="submitWaitlist()">알림 신청하기</button>
+    </div>
+    <div class="modal-body waitlist-done" id="waitlistDoneWrap" style="display:none;">
+      <div class="icon">✅</div>
+      <div class="title">신청이 완료되었습니다</div>
+      <p class="waitlist-desc">정식 오픈이 확정되면 가장 먼저 메일로 알려드릴게요. 그동안 베타 기능은 계속 무료로 사용하실 수 있습니다.</p>
+      <a href="/"><button type="button">대시보드로 돌아가기</button></a>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentWaitlistPlan = null;
+
+function openWaitlistModal(planKey, planName, priceLabel, stockLimit) {
+  currentWaitlistPlan = planKey;
+
+  // 클릭 자체는 신청 완료 여부와 무관하게 즉시 집계 (신고 절차 판단용 핵심 지표)
+  const body = new URLSearchParams({ plan: planKey });
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon('/api/waitlist/click', body);
+  } else {
+    fetch('/api/waitlist/click', { method: 'POST', body }).catch(() => {});
+  }
+
+  document.getElementById('waitlistModalTitle').textContent = `${planName} 오픈 알림 신청`;
+  const limitLabel = stockLimit === null ? '무제한' : `${stockLimit}개`;
+  document.getElementById('waitlistModalSub').textContent = `월 ${priceLabel}원 · 관심종목 ${limitLabel}`;
+  document.getElementById('waitlistEmail').value = '';
+  document.getElementById('waitlistPrivacy').checked = false;
+  document.getElementById('waitlistMarketing').checked = false;
+  document.getElementById('waitlistPrivacyDetail').classList.remove('open');
+  document.getElementById('waitlistError').textContent = '';
+  document.getElementById('waitlistFormWrap').style.display = 'block';
+  document.getElementById('waitlistDoneWrap').style.display = 'none';
+  document.getElementById('waitlistModal').classList.add('open');
+}
+
+function closeWaitlistModal() {
+  document.getElementById('waitlistModal').classList.remove('open');
+}
+
+function togglePrivacyDetail(e) {
+  e.preventDefault();
+  document.getElementById('waitlistPrivacyDetail').classList.toggle('open');
+}
+
+async function submitWaitlist() {
+  const errorEl = document.getElementById('waitlistError');
+  const email = document.getElementById('waitlistEmail').value.trim();
+  const privacyChecked = document.getElementById('waitlistPrivacy').checked;
+  const marketingChecked = document.getElementById('waitlistMarketing').checked;
+
+  if (!email || !email.includes('@')) {
+    errorEl.textContent = '올바른 이메일 주소를 입력해주세요.';
+    return;
+  }
+  if (!privacyChecked) {
+    errorEl.textContent = '개인정보 수집·이용 동의는 필수입니다.';
+    return;
+  }
+  errorEl.textContent = '';
+
+  const btn = document.getElementById('waitlistSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = '신청 중...';
+
+  try {
+    const body = new URLSearchParams({
+      email, plan: currentWaitlistPlan,
+      privacy_consent: privacyChecked ? 'on' : '',
+      marketing_consent: marketingChecked ? 'on' : '',
+    });
+    const resp = await fetch('/api/waitlist/signup', { method: 'POST', body });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      errorEl.textContent = data.detail || '신청 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+      btn.disabled = false;
+      btn.textContent = '알림 신청하기';
+      return;
+    }
+    document.getElementById('waitlistFormWrap').style.display = 'none';
+    document.getElementById('waitlistDoneWrap').style.display = 'block';
+  } catch (e) {
+    errorEl.textContent = '신청 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+    btn.disabled = false;
+    btn.textContent = '알림 신청하기';
+  }
+}
+</script>
+{% endif %}
 
 </body>
 </html>

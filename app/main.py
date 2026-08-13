@@ -33,6 +33,8 @@ FastAPI 메인 앱
   GET  /api/signals              최신 신호 JSON (외부 연동용)
   GET  /api/ai-recommend           AI 추천 종목 TOP5 JSON (코스피/코스닥, 프로 플랜 전용)
   GET  /api/ma-pullback              이동평균선 눌림목 전략 JSON (관심종목 기준, 로그인 필요)
+  POST /api/waitlist/click             유료 플랜 오픈 알림 버튼 클릭 집계 (플랜별)
+  POST /api/waitlist/signup            유료 플랜 오픈 알림 신청 (이메일 + 개인정보 동의)
 """
 
 import json
@@ -546,6 +548,29 @@ def pricing_page(request: Request):
         "pending_plan_key": subscription.get("pending_plan") if subscription else None,
         "billing_enabled": _billing_enabled(),
     })
+
+
+@app.post("/api/waitlist/click")
+def waitlist_click(plan: str = Form(...)):
+    """'오픈 알림 받기' 버튼을 누른(모달을 연) 시점을 플랜별로 집계합니다. 유사투자자문업
+    신고 절차를 시작할지 판단하는 핵심 지표라, 신청 완료 여부와 무관하게 남깁니다."""
+    if plan in billing_plans.PLAN_ORDER:
+        db.log_waitlist_click(plan)
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/waitlist/signup")
+def waitlist_signup(email: str = Form(...), plan: str = Form(...),
+                     privacy_consent: str = Form(""), marketing_consent: str = Form("")):
+    if plan not in billing_plans.PLAN_ORDER:
+        raise HTTPException(status_code=400, detail="잘못된 플랜입니다.")
+    if privacy_consent != "on":
+        raise HTTPException(status_code=400, detail="개인정보 수집·이용에 동의해주세요.")
+    email = email.strip()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="올바른 이메일 주소를 입력해주세요.")
+    db.add_waitlist_signup(email, plan, marketing_consent == "on")
+    return JSONResponse({"ok": True})
 
 
 @app.get("/billing/checkout", response_class=HTMLResponse)
@@ -1101,6 +1126,7 @@ def admin_members_page(request: Request):
         "plans": billing_plans.PLANS,
         "plan_order": billing_plans.PLAN_ORDER,
         "user": auth.current_user(request),
+        "waitlist": db.get_waitlist_stats(),
     })
 
 
