@@ -41,5 +41,13 @@ def is_paid_plan(key: str) -> bool:
     return key in PLANS and PLANS[key]["price"] > 0
 
 
+def is_at_least(key: str, min_key: str) -> bool:
+    """key 플랜이 min_key 플랜과 같거나 그 이상(PLAN_ORDER 기준)인지 여부.
+    예: is_at_least('pro', 'standard') -> True, is_at_least('basic', 'standard') -> False."""
+    if key not in PLAN_ORDER or min_key not in PLAN_ORDER:
+        return False
+    return PLAN_ORDER.index(key) >= PLAN_ORDER.index(min_key)
+
+
 def stock_limit_label(plan: dict) -> str:
     return "무제한" if plan["stock_limit"] is None else f"{plan['stock_limit']}개"

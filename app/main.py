@@ -248,6 +248,7 @@ def dashboard(request: Request, market: str = "stock"):
         "user": user,
         "market": market,
         "plan": billing_plans.get_plan(db.get_user_plan_key(user["id"])),
+        "ai_recommend_available": billing_plans.is_at_least(db.get_user_plan_key(user["id"]), "standard"),
     })
 
 
@@ -912,14 +913,14 @@ def api_signals():
 
 @app.get("/api/ai-recommend")
 def api_ai_recommend(request: Request, group: str = "kospi"):
-    """AI 추천 종목(코스피/코스닥 TOP5, 프로 플랜 전용). 캐시가 1시간 넘게 지났으면
+    """AI 추천 종목(코스피/코스닥 TOP5, 스탠다드 플랜 이상 전용). 캐시가 1시간 넘게 지났으면
     백그라운드에서 재스캔을 시작하고, 스캔이 끝날 때까지는 이전 캐시(있다면)와 함께
     scanning=true를 반환합니다 - 프론트에서 주기적으로 polling해 갱신합니다."""
     user = auth.current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-    if billing_plans.get_plan(db.get_user_plan_key(user["id"]))["key"] != "pro":
-        raise HTTPException(status_code=403, detail="프로 플랜에서 이용 가능한 기능입니다.")
+    if not billing_plans.is_at_least(db.get_user_plan_key(user["id"]), "standard"):
+        raise HTTPException(status_code=403, detail="스탠다드 플랜부터 이용 가능한 기능입니다.")
 
     group_key = group.upper()
     if group_key not in ai_recommend.GROUPS:

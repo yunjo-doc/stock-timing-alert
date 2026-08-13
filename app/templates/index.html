@@ -326,7 +326,7 @@
   {% if market == 'stock' %}
   <div class="section-title" style="margin-top:0"><span class="n">·</span> AI 추천 종목 <span style="font-size:11px; color:var(--muted); font-weight:500;">코스피·코스닥 시가총액 상위 종목 중 매수(BUY) 신호 상위 5개</span></div>
   <div class="glass panel fade-in">
-    {% if plan.key == 'pro' %}
+    {% if ai_recommend_available %}
     <div class="ai-rec-groups">
       <div class="ai-rec-group" data-group="KOSPI">
         <div class="ai-rec-group-head">
@@ -348,8 +348,8 @@
     {% else %}
     <div class="ai-rec-locked">
       <div style="font-size:22px; margin-bottom:8px;">🔒</div>
-      프로 플랜 전용 기능입니다. 코스피·코스닥 시가총액 상위 종목을 AI가 스캔해 매수 유망 종목 TOP5를 뽑아드립니다.
-      <div style="margin-top:14px"><a href="/pricing"><button type="button">프로 플랜 보기</button></a></div>
+      스탠다드 플랜부터 이용 가능한 기능입니다. 코스피·코스닥 시가총액 상위 종목을 AI가 스캔해 매수 유망 종목 TOP5를 뽑아드립니다.
+      <div style="margin-top:14px"><a href="/pricing"><button type="button">요금제 보기</button></a></div>
     </div>
     {% endif %}
   </div>
@@ -762,7 +762,7 @@ async function loadAiRecommend(group) {
     try {
       const resp = await fetch(`/api/ai-recommend?group=${group}`);
       if (resp.status === 401 || resp.status === 403) {
-        updatedEl.textContent = '프로 플랜에서 이용 가능한 기능입니다.';
+        updatedEl.textContent = '스탠다드 플랜부터 이용 가능한 기능입니다.';
         btn.disabled = false;
         return;
       }

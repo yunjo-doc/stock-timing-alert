@@ -154,6 +154,8 @@
         {% if p.price == 0 %}
         <a class="pbtn" href="{{ '/' if user else '/signup' }}">지금 무료로 시작하기</a>
         <div class="plan-note">정식 오픈 후에도 계속 무료로 제공됩니다</div>
+        {% elif p.key == 'pro' %}
+        <button type="button" disabled style="opacity:.5; cursor:default;">추후 공개 예정</button>
         {% else %}
         <button type="button" onclick="openWaitlistModal('{{ p.key }}', '{{ p.name }}', '{{ '{:,}'.format(p.price) }}', {{ (p.stock_limit ~ '') if p.stock_limit is not none else 'null' }})">오픈 알림 받기</button>
         {% endif %}
