@@ -525,15 +525,19 @@ def get_recent_notifications(limit=30, codes=None):
 
 
 def has_notification_today(user_id: int) -> bool:
-    """이 회원이 오늘(자정 이후) '실제' 알림(매수/매도 신호, 일일 요약 등)을 한 건이라도
-    받았는지 여부. 일일 요약 알림 대상(오늘 아무 알림도 못 받은 회원)을 고를 때 사용합니다.
-    연동 화면의 '테스트 알림 보내기'(code='TEST')는 연동 확인용일 뿐 실제 신호가 아니므로
-    카운트에서 제외합니다 - 안 그러면 테스트 알림 한 번 보낸 것만으로 그날의 진짜 일일
-    요약이 건너뛰어지는 문제가 있었습니다."""
+    """이 회원이 오늘(자정 이후) '실제로 전송에 성공한' 알림(매수/매도 신호, 일일 요약 등)을
+    한 건이라도 받았는지 여부. 일일 요약 알림 대상(오늘 아무 알림도 못 받은 회원)을 고를 때
+    사용합니다. 다음 두 경우는 카운트에서 제외합니다:
+    - 연동 화면의 '테스트 알림 보내기'(code='TEST') - 연동 확인용일 뿐 실제 신호가 아님
+    - 전송 시도는 했지만 실패한 알림(sent_via_kakao=0) - log_notification()은 성공/실패
+      여부와 무관하게 항상 기록을 남기는데, 이걸 그대로 카운트하면 토큰 만료 등으로 실제
+      메시지가 하나도 전달되지 않은 날에도 "오늘 받았다"고 오판해 진짜 일일 요약까지
+      건너뛰는 문제가 있었습니다."""
     today_start = datetime.now().strftime("%Y-%m-%dT00:00:00")
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT 1 FROM notifications WHERE user_id=? AND created_at >= ? AND code != 'TEST' LIMIT 1",
+            "SELECT 1 FROM notifications WHERE user_id=? AND created_at >= ? "
+            "AND code != 'TEST' AND sent_via_kakao=1 LIMIT 1",
             (user_id, today_start),
         ).fetchone()
         return row is not None
