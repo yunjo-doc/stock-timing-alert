@@ -237,7 +237,10 @@
     </div>
     <div class="modal-body" id="waitlistFormWrap">
       <div class="waitlist-sub" id="waitlistModalSub"></div>
-      <p class="waitlist-desc">정식 오픈일이 확정되면 가장 먼저 안내드립니다. 지금은 결제가 진행되지 않으며, 신청만으로 어떤 비용도 청구되지 않습니다.</p>
+      <p class="waitlist-desc">
+        정식 오픈일이 확정되면 가장 먼저 안내드립니다. 지금은 결제가 진행되지 않으며, 신청만으로 어떤 비용도 청구되지 않습니다.
+        {% if user %}신청과 동시에 베타 기간 동안 해당 플랜 기능을 바로 체험하실 수 있어요.{% endif %}
+      </p>
       <input type="email" id="waitlistEmail" placeholder="이메일">
       <label class="waitlist-check">
         <input type="checkbox" id="waitlistPrivacy">

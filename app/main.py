@@ -537,13 +537,9 @@ def _billing_enabled() -> bool:
 
 
 def _ai_recommend_available(user_id: int) -> bool:
-    """AI 추천 종목 이용 가능 여부. 결제가 아직 열리지 않은 베타 기간에는 실제로 스탠다드
-    구독을 만들 방법이 없으므로(요금제 페이지가 결제 대신 대기자 신청만 받음), 정식 플랜
-    체크로 잠그면 아무도 못 쓰게 됩니다. 베타 안내 배너에서 '모든 기능을 무료로 사용'한다고
-    안내한 대로, 결제가 열리기 전까지는 로그인한 회원 누구나 이용 가능하게 하고, 결제가
-    열리면(BILLING_ENABLED=true) 스탠다드 플랜 이상으로 정상 게이팅합니다."""
-    if not _billing_enabled():
-        return True
+    """AI 추천 종목 이용 가능 여부 (스탠다드 플랜 이상). 베타 기간에는 결제 대신 /pricing에서
+    스탠다드 오픈 알림을 신청하면 admin_set_subscription으로 스탠다드 플랜이 바로 부여되므로,
+    이 체크 하나로 베타/정식 오픈 이후 모두 동일하게 동작합니다."""
     return billing_plans.is_at_least(db.get_user_plan_key(user_id), "standard")
 
 
@@ -586,6 +582,12 @@ def waitlist_signup(request: Request, email: str = Form(...), plan: str = Form(.
         raise HTTPException(status_code=400, detail="올바른 이메일 주소를 입력해주세요.")
     user = auth.current_user(request)
     db.add_waitlist_signup(email, plan, marketing_consent == "on", user_id=user["id"] if user else None)
+    if user and not _billing_enabled():
+        # 베타 기간에는 결제를 받지 않으므로, 신청한 플랜을 결제 없이 바로 체험할 수 있도록
+        # admin_set_subscription(관리자가 결제 없이 직접 플랜을 부여하는 기존 메커니즘과 동일)으로
+        # 즉시 부여합니다. 정식 오픈(BILLING_ENABLED=true) 후에는 실제 결제로 전환해야 합니다.
+        plan_info = billing_plans.get_plan(plan)
+        db.admin_set_subscription(user["id"], plan, plan_info["price"])
     return JSONResponse({"ok": True})
 
 
