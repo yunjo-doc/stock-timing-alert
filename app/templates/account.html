@@ -115,6 +115,34 @@
     {% endif %}
   </div>
 
+  {% if not billing_enabled or waitlist_signups %}
+  <div class="glass panel fade-in" style="margin-top:20px">
+    <div style="font-size:14px; font-weight:600; margin-bottom:10px;">오픈 알림 신청 내역</div>
+    {% if waitlist_signups %}
+    <div style="font-size:12.5px; color:var(--muted); margin-bottom:12px;">
+      정식 오픈이 확정되면 아래 신청하신 플랜 기준으로 가장 먼저 안내드립니다.
+    </div>
+    <table>
+      <thead><tr><th>플랜</th><th>이메일</th><th>신청일시</th></tr></thead>
+      <tbody>
+        {% for w in waitlist_signups %}
+        <tr>
+          <td><span class="chip hold">{{ plans[w.plan_key].name if w.plan_key in plans else w.plan_key }}</span></td>
+          <td>{{ w.email }}</td>
+          <td class="mono">{{ w.created_at[:16] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="font-size:12.5px; color:var(--muted);">
+      아직 신청한 오픈 알림이 없습니다. <a href="/pricing" style="color:var(--secondary)">요금제 페이지</a>에서 원하시는 플랜의
+      "오픈 알림 받기"를 눌러 신청할 수 있어요.
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <div class="glass panel fade-in" style="margin-top:20px">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
       <div style="font-size:14px; font-weight:600;">카카오 로그인 연결</div>

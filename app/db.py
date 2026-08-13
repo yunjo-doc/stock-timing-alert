@@ -165,6 +165,7 @@ def init_db():
         conn.commit()
 
     with get_conn() as conn:
+        _ensure_column(conn, "waitlist_signups", "user_id", "INTEGER")
         _ensure_column(conn, "users", "kakao_id", "TEXT")
         _ensure_column(conn, "users", "name", "TEXT")
         _ensure_column(conn, "users", "phone", "TEXT")
@@ -857,19 +858,38 @@ def log_waitlist_click(plan_key: str):
         conn.commit()
 
 
-def add_waitlist_signup(email: str, plan_key: str, marketing_consent: bool) -> bool:
-    """이메일+플랜 조합이 이미 있으면 조용히 무시합니다(중복 신청 방지)."""
+def add_waitlist_signup(email: str, plan_key: str, marketing_consent: bool, user_id: int = None) -> bool:
+    """이메일+플랜 조합이 이미 있으면 조용히 무시합니다(중복 신청 방지). 로그인한 상태로
+    신청하면 user_id를 같이 남겨서, 나중에 본인 계정(/account)에서 신청 내역을 확인할 수
+    있게 합니다. 로그아웃 상태로 먼저 신청했다가 나중에 로그인해서 같은 이메일로 다시
+    누르면, 기존 신청 건에 user_id를 뒤늦게 연결해줍니다."""
+    email = email.strip().lower()
     with get_conn() as conn:
         try:
             conn.execute(
-                "INSERT INTO waitlist_signups (email, plan_key, marketing_consent, created_at) "
-                "VALUES (?, ?, ?, ?)",
-                (email.strip().lower(), plan_key, int(marketing_consent), datetime.now().isoformat()),
+                "INSERT INTO waitlist_signups (email, plan_key, marketing_consent, created_at, user_id) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (email, plan_key, int(marketing_consent), datetime.now().isoformat(), user_id),
             )
             conn.commit()
             return True
         except sqlite3.IntegrityError:
+            if user_id is not None:
+                conn.execute(
+                    "UPDATE waitlist_signups SET user_id=? WHERE email=? AND plan_key=? AND user_id IS NULL",
+                    (user_id, email, plan_key),
+                )
+                conn.commit()
             return False
+
+
+def get_waitlist_signups_for_user(user_id: int):
+    """/account 화면에서 본인이 신청한 오픈 알림 내역을 보여줄 때 사용합니다."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM waitlist_signups WHERE user_id=? ORDER BY id DESC", (user_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 def get_waitlist_stats():

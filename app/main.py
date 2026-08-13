@@ -248,7 +248,7 @@ def dashboard(request: Request, market: str = "stock"):
         "user": user,
         "market": market,
         "plan": billing_plans.get_plan(db.get_user_plan_key(user["id"])),
-        "ai_recommend_available": billing_plans.is_at_least(db.get_user_plan_key(user["id"]), "standard"),
+        "ai_recommend_available": _ai_recommend_available(user["id"]),
     })
 
 
@@ -510,6 +510,9 @@ def account_page(request: Request, subscribed: int = 0, canceled: int = 0, downg
         "pending_plan": pending_plan,
         "subscribed": subscribed, "canceled": canceled, "downgrade_scheduled": downgrade_scheduled,
         "test_sent": test_sent, "test_failed": test_failed, "kakao_linked": kakao_linked, "error": error,
+        "waitlist_signups": db.get_waitlist_signups_for_user(user["id"]),
+        "billing_enabled": _billing_enabled(),
+        "plans": billing_plans.PLANS,
     })
 
 
@@ -531,6 +534,17 @@ def _billing_enabled() -> bool:
     """유료 결제 오픈 여부. 유사투자자문업 신고가 끝날 때까지 결제 진입점을 잠가둡니다.
     Render 환경변수 BILLING_ENABLED=true 로 바꾸면 코드 수정 없이 유료 플랜이 열립니다."""
     return os.getenv("BILLING_ENABLED", "false").strip().lower() in ("1", "true", "yes", "y")
+
+
+def _ai_recommend_available(user_id: int) -> bool:
+    """AI 추천 종목 이용 가능 여부. 결제가 아직 열리지 않은 베타 기간에는 실제로 스탠다드
+    구독을 만들 방법이 없으므로(요금제 페이지가 결제 대신 대기자 신청만 받음), 정식 플랜
+    체크로 잠그면 아무도 못 쓰게 됩니다. 베타 안내 배너에서 '모든 기능을 무료로 사용'한다고
+    안내한 대로, 결제가 열리기 전까지는 로그인한 회원 누구나 이용 가능하게 하고, 결제가
+    열리면(BILLING_ENABLED=true) 스탠다드 플랜 이상으로 정상 게이팅합니다."""
+    if not _billing_enabled():
+        return True
+    return billing_plans.is_at_least(db.get_user_plan_key(user_id), "standard")
 
 
 @app.get("/pricing", response_class=HTMLResponse)
@@ -561,7 +575,7 @@ def waitlist_click(plan: str = Form(...)):
 
 
 @app.post("/api/waitlist/signup")
-def waitlist_signup(email: str = Form(...), plan: str = Form(...),
+def waitlist_signup(request: Request, email: str = Form(...), plan: str = Form(...),
                      privacy_consent: str = Form(""), marketing_consent: str = Form("")):
     if plan not in billing_plans.PLAN_ORDER:
         raise HTTPException(status_code=400, detail="잘못된 플랜입니다.")
@@ -570,7 +584,8 @@ def waitlist_signup(email: str = Form(...), plan: str = Form(...),
     email = email.strip()
     if "@" not in email or "." not in email.split("@")[-1]:
         raise HTTPException(status_code=400, detail="올바른 이메일 주소를 입력해주세요.")
-    db.add_waitlist_signup(email, plan, marketing_consent == "on")
+    user = auth.current_user(request)
+    db.add_waitlist_signup(email, plan, marketing_consent == "on", user_id=user["id"] if user else None)
     return JSONResponse({"ok": True})
 
 
@@ -919,7 +934,7 @@ def api_ai_recommend(request: Request, group: str = "kospi"):
     user = auth.current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
-    if not billing_plans.is_at_least(db.get_user_plan_key(user["id"]), "standard"):
+    if not _ai_recommend_available(user["id"]):
         raise HTTPException(status_code=403, detail="스탠다드 플랜부터 이용 가능한 기능입니다.")
 
     group_key = group.upper()
