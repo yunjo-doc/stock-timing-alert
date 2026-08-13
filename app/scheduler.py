@@ -109,7 +109,11 @@ def _analyze_stocks(market: str, stock_list: list, cfg: dict, fast: bool = False
 
 
 def _analyze_market(cfg: dict, market: str):
-    return _analyze_stocks(market, _build_analysis_universe(cfg, market), cfg)
+    # 개인 '지금 갱신'/AI 추천에서 이미 검증된 빠른 JSON API(get_daily_ohlcv_fast)를 정기
+    # 스케줄러의 전체 유니버스 사이클에도 적용합니다. 종목당 14번 페이지네이션하던 옛날
+    # 방식(약 10~13초/종목) 대신 1회 요청(약 1~2초/종목)으로 끝나서, 회원이 늘어 관심종목
+    # 유니버스가 커져도 30분 사이클 안에 여유 있게 끝날 수 있습니다.
+    return _analyze_stocks(market, _build_analysis_universe(cfg, market), cfg, fast=True)
 
 
 def run_analysis_for_watchlist(cfg: dict, market: str, watchlist: list):
