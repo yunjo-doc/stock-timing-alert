@@ -146,6 +146,17 @@ def init_db():
             )
         """)
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS ai_recommend_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                group_key TEXT NOT NULL,
+                code TEXT NOT NULL,
+                name TEXT NOT NULL,
+                final_score REAL,
+                price REAL
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS waitlist_clicks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 plan_key TEXT NOT NULL,
@@ -905,6 +916,34 @@ def get_waitlist_stats():
             "SELECT * FROM waitlist_signups ORDER BY id DESC LIMIT 200"
         ).fetchall()]
         return {"clicks": clicks, "signups": signups, "recent": recent}
+
+
+# ----------------------------------------------------------------------
+# AI 추천 종목 트랙레코드 (스캔이 끝날 때마다 그날의 TOP5를 기록 - 종목당 몇 건 안 되는
+# 가벼운 쓰기라 부하 없음. performance.py와 같은 방식으로, 수익률은 저장 시점이 아니라
+# 조회 시점에 최신 시세로 계산합니다)
+# ----------------------------------------------------------------------
+def save_ai_recommend_events(group_key: str, cards: list):
+    if not cards:
+        return
+    now = datetime.now().isoformat()
+    with get_conn() as conn:
+        conn.executemany(
+            "INSERT INTO ai_recommend_events (created_at, group_key, code, name, final_score, price) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [(now, group_key, c["code"], c["name"], c.get("final_score"), c.get("current_price")) for c in cards],
+        )
+        conn.commit()
+
+
+def get_ai_recommend_events(days: int = 180, limit: int = 1000):
+    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM ai_recommend_events WHERE created_at >= ? ORDER BY id DESC LIMIT ?",
+            (cutoff, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 
 # ----------------------------------------------------------------------

@@ -31,7 +31,8 @@ FastAPI 메인 앱
   POST /admin/members/{user_id}/toggle-active      회원 계정 활성/정지 토글
   POST /admin/members/{user_id}/profile             관리자가 회원 이름/전화번호 수정
   GET  /api/signals              최신 신호 JSON (외부 연동용)
-  GET  /api/ai-recommend           AI 추천 종목 TOP5 JSON (코스피/코스닥, 프로 플랜 전용)
+  GET  /api/ai-recommend           AI 추천 종목 TOP5 JSON (코스피/코스닥, 스탠다드 플랜 이상)
+  GET  /api/ai-recommend/track-record  AI 추천 트랙레코드(과거 추천 종목들의 실제 수익률/승률)
   GET  /api/ma-pullback              이동평균선 눌림목 전략 JSON (관심종목 기준, 로그인 필요)
   POST /api/waitlist/click             유료 플랜 오픈 알림 버튼 클릭 집계 (플랜별)
   POST /api/waitlist/signup            유료 플랜 오픈 알림 신청 (이메일 + 개인정보 동의)
@@ -951,6 +952,17 @@ def api_ai_recommend(request: Request, group: str = "kospi"):
         "updated_at": snapshot["updated_at"] if snapshot else None,
         "items": snapshot["data"] if snapshot else [],
     }
+
+
+@app.get("/api/ai-recommend/track-record")
+def api_ai_recommend_track_record(request: Request):
+    """지금까지 AI 추천이 뽑았던 종목들의 실제 이후 5/20거래일 수익률·승률. 6시간 캐시."""
+    user = auth.current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    if not _ai_recommend_available(user["id"]):
+        raise HTTPException(status_code=403, detail="스탠다드 플랜부터 이용 가능한 기능입니다.")
+    return ai_recommend.get_track_record()
 
 
 @app.get("/api/ma-pullback")
