@@ -757,7 +757,7 @@ function formatPriceJs(value) {
   return s + '원';
 }
 
-// AI 추천 종목(코스피/코스닥 TOP5, 프로 플랜 전용): 버튼 클릭 시 조회하고, 서버가
+// AI 추천 종목(코스피/코스닥 TOP5, 스탠다드 플랜 이상): 버튼 클릭 시 조회하고, 서버가
 // 스캔 중(scanning:true)이면 완료될 때까지 몇 초 간격으로 다시 조회합니다.
 const AI_REC_POLL_INTERVAL_MS = 4000;
 const AI_REC_MAX_POLLS = 45; // 4초 x 45 = 최대 3분
@@ -773,7 +773,11 @@ async function loadAiRecommend(group) {
   const poll = async (attempt) => {
     let data;
     try {
-      const resp = await fetch(`/api/ai-recommend?group=${group}`);
+      // 캐시가 아직 유효하면 서버가 즉시 응답해서 '조회 중...'이 눈에 안 보일 정도로 짧게
+      // 지나가버려, 클릭이 씹힌 것처럼 보이는 문제가 있었습니다. 최소 400ms는 로딩 상태가
+      // 보이도록 강제합니다 (클릭했다는 걸 항상 체감할 수 있게).
+      const minDelay = new Promise(resolve => setTimeout(resolve, 400));
+      const [resp] = await Promise.all([fetch(`/api/ai-recommend?group=${group}`), minDelay]);
       if (resp.status === 401 || resp.status === 403) {
         updatedEl.textContent = '스탠다드 플랜부터 이용 가능한 기능입니다.';
         btn.disabled = false;
